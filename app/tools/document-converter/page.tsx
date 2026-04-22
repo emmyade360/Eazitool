@@ -1,214 +1,302 @@
 'use client';
 
-import { useState, useRef, Suspense } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useLanguage } from '@/components/language-context';
 
-const CONVERSIONS = [
-  { from: 'pdf',  to: 'docx', label: 'PDF → DOCX', accept: '.pdf',       desc: 'Convert PDF to editable Word document',   color: 'blue' },
-  { from: 'docx', to: 'pdf',  label: 'DOCX → PDF',  accept: '.docx,.doc', desc: 'Convert Word document to PDF',            color: 'violet' },
-  { from: 'pdf',  to: 'txt',  label: 'PDF → TXT',   accept: '.pdf',       desc: 'Extract plain text from PDF',             color: 'amber' },
-  { from: 'txt',  to: 'pdf',  label: 'TXT → PDF',   accept: '.txt',       desc: 'Convert plain text file to PDF',          color: 'emerald' },
-  { from: 'docx', to: 'txt',  label: 'DOCX → TXT',  accept: '.docx,.doc', desc: 'Extract plain text from Word document',   color: 'rose' },
-] as const;
+const FORMATS = ['pdf', 'docx', 'txt'] as const;
+type Format = typeof FORMATS[number];
 
-type Conv = typeof CONVERSIONS[number];
-
-const COLORS: Record<string, { bg: string; text: string; border: string; btn: string; badge: string }> = {
-  blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',    btn: 'bg-blue-600 hover:bg-blue-700',    badge: 'bg-blue-100 text-blue-700' },
-  violet:  { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200',  btn: 'bg-violet-600 hover:bg-violet-700', badge: 'bg-violet-100 text-violet-700' },
-  amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   btn: 'bg-amber-500 hover:bg-amber-600',   badge: 'bg-amber-100 text-amber-700' },
-  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', btn: 'bg-emerald-600 hover:bg-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
-  rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',    btn: 'bg-rose-600 hover:bg-rose-700',    badge: 'bg-rose-100 text-rose-700' },
+const LABELS: Record<Format, string> = {
+  pdf: 'PDF',
+  docx: 'DOCX',
+  txt: 'TXT',
 };
 
-function ConverterInner() {
-  const params   = useSearchParams();
-  const initFrom = params.get('from') ?? 'pdf';
-  const initTo   = params.get('to')   ?? 'docx';
+const ACCEPT_BY_FORMAT: Record<Format, string> = {
+  pdf: '.pdf',
+  docx: '.doc,.docx',
+  txt: '.txt',
+};
 
-  const initial = CONVERSIONS.find(c => c.from === initFrom && c.to === initTo) ?? CONVERSIONS[0];
-  const [selected, setSelected] = useState<Conv>(initial);
-  const [file,     setFile]     = useState<File | null>(null);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [done,     setDone]     = useState(false);
+const PAGE_COPY = {
+  en: {
+    title: 'Document Converter',
+    subtitle: 'Convert PDF, DOCX, and TXT files online in a few clicks.',
+    from: 'From',
+    to: 'To',
+    upload: 'Upload your file',
+    accepted: 'PDF, DOCX, and TXT files are supported',
+    change: 'Click to change',
+    button: 'Convert file',
+    loading: 'Converting...',
+    preview: 'Selected conversion',
+    done: 'Your converted document is downloading.',
+  },
+  fr: {
+    title: 'Convertisseur de documents',
+    subtitle: 'Convertissez des fichiers PDF, DOCX et TXT en quelques clics.',
+    from: 'Depuis',
+    to: 'Vers',
+    upload: 'Importez votre fichier',
+    accepted: 'Les fichiers PDF, DOCX et TXT sont pris en charge',
+    change: 'Cliquez pour changer',
+    button: 'Convertir le fichier',
+    loading: 'Conversion...',
+    preview: 'Conversion selectionnee',
+    done: 'Votre document converti est en cours de telechargement.',
+  },
+  es: {
+    title: 'Convertidor de documentos',
+    subtitle: 'Convierte archivos PDF, DOCX y TXT online en pocos clics.',
+    from: 'Desde',
+    to: 'Hacia',
+    upload: 'Sube tu archivo',
+    accepted: 'Se admiten archivos PDF, DOCX y TXT',
+    change: 'Haz clic para cambiar',
+    button: 'Convertir archivo',
+    loading: 'Convirtiendo...',
+    preview: 'Conversion seleccionada',
+    done: 'Tu documento convertido se esta descargando.',
+  },
+  pt: {
+    title: 'Conversor de documentos',
+    subtitle: 'Converta ficheiros PDF, DOCX e TXT online em poucos cliques.',
+    from: 'De',
+    to: 'Para',
+    upload: 'Carregue o seu ficheiro',
+    accepted: 'Ficheiros PDF, DOCX e TXT sao suportados',
+    change: 'Clique para alterar',
+    button: 'Converter ficheiro',
+    loading: 'A converter...',
+    preview: 'Conversao selecionada',
+    done: 'O seu documento convertido esta a transferir.',
+  },
+  ar: {
+    title: 'Document Converter',
+    subtitle: 'Convert PDF, DOCX, and TXT files online in a few clicks.',
+    from: 'From',
+    to: 'To',
+    upload: 'Upload your file',
+    accepted: 'PDF, DOCX, and TXT files are supported',
+    change: 'Click to change',
+    button: 'Convert file',
+    loading: 'Converting...',
+    preview: 'Selected conversion',
+    done: 'Your converted document is downloading.',
+  },
+  sw: {
+    title: 'Kibadilishi cha hati',
+    subtitle: 'Badilisha faili za PDF, DOCX na TXT mtandaoni kwa mibofyo michache.',
+    from: 'Kutoka',
+    to: 'Kwenda',
+    upload: 'Pakia faili yako',
+    accepted: 'Faili za PDF, DOCX na TXT zinaungwa mkono',
+    change: 'Bonyeza kubadilisha',
+    button: 'Badilisha faili',
+    loading: 'Inabadilisha...',
+    preview: 'Badiliko lililochaguliwa',
+    done: 'Hati yako iliyobadilishwa inapakuliwa.',
+  },
+} as const;
+
+function DocumentConverterInner() {
+  const { language } = useLanguage();
+  const copy = PAGE_COPY[language] ?? PAGE_COPY.en;
+  const params = useSearchParams();
+  const initialFrom = (params.get('from') ?? 'pdf') as Format;
+  const initialTo = (params.get('to') ?? 'docx') as Format;
+  const [from, setFrom] = useState<Format>(FORMATS.includes(initialFrom) ? initialFrom : 'pdf');
+  const [to, setTo] = useState<Format>(FORMATS.includes(initialTo) ? initialTo : 'docx');
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const c = COLORS[selected.color];
-
-  const VALID_TYPES: Record<string, { mime: Set<string>; label: string }> = {
-    pdf:  { mime: new Set(['application/pdf']),
-            label: 'a PDF (.pdf)' },
-    docx: { mime: new Set(['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']),
-            label: 'a Word document (.docx / .doc)' },
-    txt:  { mime: new Set(['text/plain']),
-            label: 'a plain-text file (.txt)' },
-  };
-
-  function handleFile(f: File) {
-    const expected = VALID_TYPES[selected.from];
-    if (expected && !expected.mime.has(f.type)) {
-      setError(`"${f.name}" is not the right file type. Please upload ${expected.label}.`);
-      if (inputRef.current) inputRef.current.value = '';
-      return;
-    }
-    setFile(f);
-    setError('');
-    setDone(false);
-  }
-
-  function pick(conv: Conv) {
-    setSelected(conv);
-    setFile(null);
-    setError('');
-    setDone(false);
-    if (inputRef.current) inputRef.current.value = '';
-  }
-
-  async function readErrorMessage(res: Response) {
-    const contentType = res.headers.get('content-type') ?? '';
-
-    if (contentType.includes('application/json')) {
-      const payload = await res.json() as { error?: string };
-      return payload.error ?? 'Conversion failed';
-    }
-
-    const text = await res.text();
-    const cleaned = text
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!cleaned) return 'Conversion failed';
-    if (cleaned.length > 220) return `${cleaned.slice(0, 217)}...`;
-    return cleaned;
-  }
+  const acceptedInput = useMemo(() => ACCEPT_BY_FORMAT[from], [from]);
 
   async function convert() {
     if (!file) return;
-    setLoading(true); setError(''); setDone(false);
+
+    setLoading(true);
+    setError('');
+    setDone(false);
+
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('from', selected.from);
-      form.append('to',   selected.to);
+      form.append('from', from);
+      form.append('to', to);
 
       const res = await fetch('/api/convert/document', { method: 'POST', body: form });
-
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res));
+        const payload = (await res.json()) as { error?: string };
+        throw new Error(payload.error ?? 'Conversion failed');
       }
 
-      const blob     = await res.blob();
-      const url      = URL.createObjectURL(blob);
-      const a        = document.createElement('a');
-      const disp     = res.headers.get('Content-Disposition') ?? '';
-      const match    = disp.match(/filename="([^"]+)"/);
-      a.download     = match ? match[1] : `converted.${selected.to}`;
-      a.href         = url;
-      a.click();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      anchor.download = match ? match[1] : `converted.${to}`;
+      anchor.href = url;
+      anchor.click();
       URL.revokeObjectURL(url);
       setDone(true);
-      setTimeout(() => {
-        setFile(null);
-        setDone(false);
-        if (inputRef.current) inputRef.current.value = '';
-      }, 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-6">
-      <div className="max-w-4xl mx-auto">
-
-        {/* Header */}
+    <div className="min-h-screen bg-slate-50 px-6 py-10">
+      <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+          <div className="mb-2 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600">
+              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">Document Converter</h1>
-              <p className="text-sm text-slate-500">PDF · DOCX · TXT — fast, private, no file size limits</p>
+              <h1 className="text-2xl font-bold text-slate-800">{copy.title}</h1>
+              <p className="text-sm text-slate-500">{copy.subtitle}</p>
             </div>
           </div>
         </div>
 
-        {/* Conversion type selector */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {CONVERSIONS.map(conv => {
-            const cc = COLORS[conv.color];
-            const active = conv.from === selected.from && conv.to === selected.to;
-            return (
-              <button
-                key={`${conv.from}-${conv.to}`}
-                onClick={() => pick(conv)}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                  active
-                    ? `${cc.bg} ${cc.text} ${cc.border} shadow-sm`
-                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {conv.label}
-              </button>
-            );
-          })}
-        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-700">{copy.from}</h2>
+                  <div className="grid grid-cols-3 gap-2">
+                    {FORMATS.map((format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => {
+                          setFrom(format);
+                          if (format === to) {
+                            setTo(format === 'pdf' ? 'docx' : 'pdf');
+                          }
+                          setFile(null);
+                          if (inputRef.current) inputRef.current.value = '';
+                        }}
+                        className={`rounded-xl border py-2.5 text-sm font-bold transition-all ${
+                          from === format
+                            ? 'border-violet-600 bg-violet-600 text-white shadow-sm'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
+                        }`}
+                      >
+                        {LABELS[format]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-        {/* Drop zone */}
-        <div className={`rounded-2xl border-2 border-dashed transition-all ${c.border} ${c.bg} p-12 text-center mb-6 cursor-pointer`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={e => e.preventDefault()}
-          onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-        >
-          <input ref={inputRef} type="file" accept={selected.accept} className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-          <svg className={`w-12 h-12 mx-auto mb-3 ${c.text} opacity-50`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          {file ? (
-            <div>
-              <p className={`font-bold text-sm ${c.text}`}>{file.name}</p>
-              <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB · Click to change</p>
+                <div>
+                  <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-700">{copy.to}</h2>
+                  <div className="grid grid-cols-3 gap-2">
+                    {FORMATS.map((format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        disabled={format === from}
+                        onClick={() => setTo(format)}
+                        className={`rounded-xl border py-2.5 text-sm font-bold transition-all ${
+                          to === format
+                            ? 'border-violet-600 bg-violet-600 text-white shadow-sm'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        {LABELS[format]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div>
-              <p className={`font-semibold text-sm ${c.text}`}>Drop your {selected.from.toUpperCase()} file here</p>
-              <p className="text-xs text-slate-400 mt-1">or click to browse · accepts {selected.accept}</p>
+
+            <div
+              className="cursor-pointer rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50 p-10 text-center transition-colors hover:bg-violet-100"
+              onClick={() => inputRef.current?.click()}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept={acceptedInput}
+                className="hidden"
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0];
+                  if (nextFile) {
+                    setFile(nextFile);
+                    setDone(false);
+                    setError('');
+                  }
+                }}
+              />
+              <svg className="mx-auto mb-3 h-10 w-10 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              {file ? (
+                <div>
+                  <p className="text-sm font-bold text-violet-700">{file.name}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {(file.size / 1024).toFixed(1)} KB - {copy.change}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-semibold text-violet-700">{copy.upload}</p>
+                  <p className="mt-1 text-xs text-slate-400">{copy.accepted}</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Selected conversion info */}
-        <div className={`rounded-xl px-5 py-4 mb-6 flex items-center gap-3 ${c.bg} border ${c.border}`}>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${c.badge}`}>{selected.label}</span>
-          <p className={`text-sm ${c.text}`}>{selected.desc}</p>
-        </div>
+            {error && <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
+            {done && <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{copy.done}</div>}
 
-        {error && <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600 mb-4">{error}</div>}
-
-        {done && (
-          <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-700 mb-4 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            Conversion complete — your file is downloading.
+            <button
+              type="button"
+              onClick={convert}
+              disabled={!file || loading || from === to}
+              className="w-full rounded-xl bg-violet-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-200 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? copy.loading : `${copy.button} ->`}
+            </button>
           </div>
-        )}
 
-        <button
-          onClick={convert}
-          disabled={!file || loading}
-          className={`w-full py-3.5 rounded-xl text-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg ${c.btn}`}
-        >
-          {loading ? 'Converting…' : `Convert to ${selected.to.toUpperCase()} →`}
-        </button>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-sm font-bold text-slate-700">{copy.preview}</h2>
+            </div>
+            <div className="flex min-h-[380px] items-center justify-center p-6">
+              <div className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-violet-100 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">{copy.from}</p>
+                    <p className="mt-2 text-xl font-bold text-slate-800">{LABELS[from]}</p>
+                  </div>
+                  <div className="rounded-xl border border-violet-100 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">{copy.to}</p>
+                    <p className="mt-2 text-xl font-bold text-slate-800">{LABELS[to]}</p>
+                  </div>
+                </div>
+                <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-white p-4">
+                  <p className="text-sm text-slate-500">
+                    {file ? file.name : copy.accepted}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -216,8 +304,8 @@ function ConverterInner() {
 
 export default function DocumentConverterPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center text-slate-400">Loading…</div>}>
-      <ConverterInner />
+    <Suspense fallback={<div className="p-10 text-center text-slate-400">Loading...</div>}>
+      <DocumentConverterInner />
     </Suspense>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useLanguage } from '@/components/language-context';
+import { IMAGE_RESIZER_COPY } from '@/lib/i18n';
 
 const OUTPUT_FORMATS = ['png', 'jpeg', 'webp', 'avif', 'tiff'] as const;
 type OutputFmt = typeof OUTPUT_FORMATS[number];
@@ -65,11 +67,11 @@ function getPreviewDrawBox(
 }
 
 export default function ImageResizerPage() {
-  const loadingMessages = [
-    'Hold on, we are finalizing your task.',
-    'Sit tight while we finish your work.',
-    'Great, your result is almost ready.',
-  ];
+  const { language } = useLanguage();
+  const copy = IMAGE_RESIZER_COPY[language] ?? IMAGE_RESIZER_COPY.en;
+  const loadingMessages = copy.loadingMessages;
+  const LOADER_STEP_MS = 5000;
+  const LOADER_TOTAL_MS = loadingMessages.length * LOADER_STEP_MS;
   const [file, setFile] = useState<File | null>(null);
   const [meta, setMeta] = useState<ImageMeta | null>(null);
   const [preview, setPreview] = useState('');
@@ -221,7 +223,7 @@ export default function ImageResizerPage() {
 
     const timer = window.setInterval(() => {
       setLoadingStep((current) => Math.min(current + 1, loadingMessages.length - 1));
-    }, 1800);
+    }, LOADER_STEP_MS);
 
     return () => window.clearInterval(timer);
   }, [loading, loadingMessages.length]);
@@ -250,6 +252,7 @@ export default function ImageResizerPage() {
       return;
     }
 
+    const startedAt = Date.now();
     setLoading(true);
     setError('');
     setDone(null);
@@ -281,6 +284,13 @@ export default function ImageResizerPage() {
       const disposition = res.headers.get('Content-Disposition') ?? '';
       const match = disposition.match(/filename="([^"]+)"/);
       const filename = match ? match[1] : `resized.${format}`;
+
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, LOADER_TOTAL_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remaining));
+      }
+
       setDownloadInfo({ url, name: filename });
       setDone({ w: outWidth, h: outHeight });
     } catch (err) {
@@ -309,8 +319,8 @@ export default function ImageResizerPage() {
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">Image Resizer</h1>
-              <p className="text-sm text-slate-500">Resize to exact dimensions with Lanczos3 resampling and instant preview updates.</p>
+              <h1 className="text-2xl font-bold text-slate-800">{copy.title}</h1>
+              <p className="text-sm text-slate-500">{copy.subtitle}</p>
             </div>
           </div>
         </div>
@@ -353,12 +363,12 @@ export default function ImageResizerPage() {
               {file ? (
                 <div>
                   <p className="font-bold text-sm text-indigo-700">{file.name}</p>
-                  <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB - Click to change</p>
+                  <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB - {copy.clickToChange}</p>
                 </div>
               ) : (
                 <div>
-                  <p className="font-semibold text-sm text-indigo-700">Upload an image to get started</p>
-                  <p className="text-xs text-slate-400 mt-1">JPEG, PNG, WebP, AVIF, GIF, TIFF, HEIF, SVG accepted</p>
+                  <p className="font-semibold text-sm text-indigo-700">{copy.uploadTitle}</p>
+                  <p className="text-xs text-slate-400 mt-1">{copy.uploadHint}</p>
                 </div>
               )}
             </div>
@@ -379,7 +389,7 @@ export default function ImageResizerPage() {
                         : 'bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    Dimensions
+                    {copy.dimensions}
                   </button>
                   <button
                     type="button"
@@ -391,7 +401,7 @@ export default function ImageResizerPage() {
                         : 'bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    Percentage
+                    {copy.percentage}
                   </button>
                 </div>
               </div>
@@ -399,7 +409,7 @@ export default function ImageResizerPage() {
               {!usePercent ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1.5 font-medium">Width</label>
+                    <label className="block text-xs text-slate-500 mb-1.5 font-medium">{copy.width}</label>
                     <input
                       type="number"
                       min={1}
@@ -411,7 +421,7 @@ export default function ImageResizerPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1.5 font-medium">Height</label>
+                    <label className="block text-xs text-slate-500 mb-1.5 font-medium">{copy.height}</label>
                     <input
                       type="number"
                       min={1}
@@ -450,13 +460,13 @@ export default function ImageResizerPage() {
 
               {meta && (
                 <p className="mt-3 text-xs text-slate-400">
-                  Original: {meta.width} x {meta.height} px
+                  {copy.original}: {meta.width} x {meta.height} px
                 </p>
               )}
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4">Fit Mode</h2>
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4">{copy.fitMode}</h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {FIT_OPTIONS.map((option) => (
                   <button
@@ -477,7 +487,7 @@ export default function ImageResizerPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4">Output Format</h2>
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4">{copy.outputFormat}</h2>
               <div className="grid grid-cols-5 gap-2">
                 {OUTPUT_FORMATS.map((outputFormat) => (
                   <button
@@ -499,7 +509,7 @@ export default function ImageResizerPage() {
             {hasQuality && (
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Quality</h2>
+                  <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest">{copy.quality}</h2>
                   <span className="text-sm font-bold text-indigo-600">{quality}%</span>
                 </div>
                 <input
@@ -511,8 +521,8 @@ export default function ImageResizerPage() {
                   className="w-full accent-indigo-600"
                 />
                 <div className="flex justify-between text-xs text-slate-400 mt-1">
-                  <span>10% smallest file</span>
-                  <span>100% highest quality</span>
+                  <span>{copy.smallest}</span>
+                  <span>{copy.bestQuality}</span>
                 </div>
               </div>
             )}
@@ -529,16 +539,16 @@ export default function ImageResizerPage() {
                   <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span className="font-semibold">Great, your result is ready.</span>
+                  <span className="font-semibold">{copy.ready}</span>
                 </div>
-                <p>Output locked to: {done.w} x {done.h} px.</p>
+                <p>{copy.result}: {done.w} x {done.h} px.</p>
                 {downloadInfo && (
                   <a
                     href={downloadInfo.url}
                     download={downloadInfo.name}
                     className="inline-flex mt-3 px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
                   >
-                    Download Result
+                    {copy.download}
                   </a>
                 )}
               </div>
@@ -568,13 +578,13 @@ export default function ImageResizerPage() {
               disabled={!file || loading || (!width && !height)}
               className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-indigo-100"
             >
-              {loading ? 'Resizing...' : 'Resize Image ->'}
+              {loading ? `${copy.resize}...` : `${copy.resize} ->`}
             </button>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-700">Preview</h2>
+              <h2 className="text-sm font-bold text-slate-700">{copy.preview}</h2>
               {meta && (
                 <span className="text-xs text-slate-400">{meta.width} x {meta.height} px - {meta.sizeKB.toFixed(1)} KB</span>
               )}
@@ -591,12 +601,12 @@ export default function ImageResizerPage() {
                   {meta && (
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center">
-                        <p className="text-xs text-slate-400 mb-1">Original</p>
+                        <p className="text-xs text-slate-400 mb-1">{copy.original}</p>
                         <p className="text-sm font-bold text-slate-700">{meta.width} x {meta.height}</p>
                         <p className="text-xs text-slate-400 mt-0.5">{meta.sizeKB.toFixed(0)} KB</p>
                       </div>
                       <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-center">
-                        <p className="text-xs text-indigo-400 mb-1">Target</p>
+                        <p className="text-xs text-indigo-400 mb-1">{copy.target}</p>
                         <p className="text-sm font-bold text-indigo-700">{width || '?'} x {height || '?'}</p>
                         <p className="text-xs text-indigo-400 mt-0.5">
                           {usePercent ? `${resizePercent}% scale` : FORMAT_LABEL[format]}
@@ -615,7 +625,7 @@ export default function ImageResizerPage() {
                       d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
                     />
                   </svg>
-                  <p className="text-slate-300 text-sm">Upload an image to preview</p>
+                  <p className="text-slate-300 text-sm">{copy.previewPlaceholder}</p>
                 </div>
               )}
             </div>

@@ -7,6 +7,8 @@
   --brand-white: #ffffff;
   --brand-light: #eff6ff;
   --brand-hover: #1d4ed8;
+  --font-geist-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-geist-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 @theme inline {

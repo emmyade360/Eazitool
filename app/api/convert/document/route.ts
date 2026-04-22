@@ -147,7 +147,7 @@ function closeTag(stack: StyleFrame[], tag: string): void {
 }
 
 async function renderHtmlToPdfKit(
-  doc: InstanceType<typeof import('pdfkit').default>,
+  doc: PDFKit.PDFDocument,
   html: string
 ): Promise<void> {
   const stack: StyleFrame[] = [];
