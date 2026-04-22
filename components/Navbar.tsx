@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from './language-context';
+import { getToolCategories } from './tools-data';
 
 const TOOL_ICONS = {
   cv: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
@@ -65,34 +66,23 @@ function LanguageSelector({
 }
 
 export default function Navbar() {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileTools, setMobileTools] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const toolCategories = useMemo(() => getToolCategories(language), [language]);
   const tools = useMemo(
-    () => [
-      {
-        href: '/tools/cv-builder',
-        label: t('tool.cvBuilder'),
-        desc: t('tool.cvBuilderDesc'),
-        icon: TOOL_ICONS.cv,
-      },
-      {
-        href: '/tools/document-converter',
-        label: t('tool.documentConverter'),
-        desc: t('tool.documentConverterDesc'),
-        icon: TOOL_ICONS.doc,
-      },
-      {
-        href: '/tools/image-converter',
-        label: t('tool.imageConverter'),
-        desc: t('tool.imageConverterDesc'),
-        icon: TOOL_ICONS.image,
-      },
-    ],
-    [t]
+    () =>
+      toolCategories.flatMap((category) =>
+        category.items.map((tool) => ({
+          ...tool,
+          icon: tool.icon ?? TOOL_ICONS.image,
+          category: category.category,
+        }))
+      ),
+    [toolCategories]
   );
 
   const openTools = () => {
@@ -160,7 +150,7 @@ export default function Navbar() {
                   </div>
                   <div>
                     <p className="font-medium text-blue-800">{tool.label}</p>
-                    <p className="text-xs text-blue-500">{tool.desc}</p>
+                    <p className="text-xs text-blue-500">{tool.description}</p>
                   </div>
                 </Link>
               ))}
@@ -208,21 +198,38 @@ export default function Navbar() {
             </button>
 
             {mobileTools && (
-              <div className="ml-4 space-y-2 py-2">
-                {tools.map((tool) => (
-                  <Link
-                    key={tool.href}
-                    href={tool.href}
-                    onClick={closeMobileMenu}
-                    className="flex items-center gap-3 rounded-lg px-4 py-2.5 hover:bg-blue-50"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-                      <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tool.icon} />
-                      </svg>
+              <div className="ml-4 space-y-3 py-2">
+                {toolCategories.map((category) => (
+                  <div key={category.category}>
+                    <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      {category.category}
+                    </p>
+                    <div className="space-y-1">
+                      {category.items.map((tool) => (
+                        <Link
+                          key={tool.href}
+                          href={tool.href}
+                          onClick={closeMobileMenu}
+                          className="flex items-center gap-3 rounded-lg px-4 py-2.5 hover:bg-blue-50"
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+                            <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d={tool.icon ?? TOOL_ICONS.image}
+                              />
+                            </svg>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-blue-800">{tool.label}</p>
+                            <p className="truncate text-xs text-blue-500">{tool.description}</p>
+                          </div>
+                        </Link>
+                      ))}
                     </div>
-                    <span className="text-sm font-medium text-blue-800">{tool.label}</span>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}

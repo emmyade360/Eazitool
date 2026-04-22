@@ -220,6 +220,9 @@ export default function CVBuilderPage() {
   const [templateAssignments, setTemplateAssignments] = useState<TemplateAssignments>({});
   const [selected, setSelected] = useState<CVVariant | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<CVTemplateId>('executive');
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'docx'>('pdf');
+  const [exporting, setExporting] = useState(false);
+  const [improvingSummary, setImprovingSummary] = useState(false);
 
   function setPersonalField(key: keyof typeof personal, value: string) {
     setPersonal((current) => ({ ...current, [key]: value }));
@@ -316,13 +319,78 @@ export default function CVBuilderPage() {
     setStep(3);
   }
 
-  function download(variant: CVVariant) {
-    const blob = new Blob([variant.content], { type: 'text/plain' });
-    const anchor = document.createElement('a');
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = `${personal.name.replace(/\s+/g, '_') || 'CV'}_${variant.title}_ATS.txt`;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+  async function exportVariant(variant: CVVariant, templateId: CVTemplateId) {
+    setExporting(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/cv/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: variant.content,
+          templateId,
+          format: exportFormat,
+          fileBaseName: `${personal.name || 'CV'}_${variant.title}_${CV_TEMPLATE_META[templateId].label}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? 'Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      anchor.download = match ? match[1] : `cv.${exportFormat}`;
+      anchor.href = url;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function improveSummary() {
+    if (!summary.trim() && !experience.some((e) => e.role.trim() || e.company.trim())) {
+      setError('Please add some work experience or a basic summary to improve.');
+      return;
+    }
+
+    setImprovingSummary(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/cv/improve-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summary,
+          name: personal.name,
+          experience,
+          skills,
+        }),
+      });
+
+      const data = (await response.json()) as { summary?: string; error?: string };
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error ?? 'Failed to improve summary');
+      }
+
+      if (data.summary) {
+        setSummary(data.summary);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setImprovingSummary(false);
+    }
   }
 
   const canGenerate = personal.name.trim() && personal.email.trim() && enabledSections.length > 0;
@@ -331,13 +399,30 @@ export default function CVBuilderPage() {
     switch (id) {
       case 'summary':
         return (
-          <TextareaField
-            label="Professional Summary"
-            value={summary}
-            onChange={setSummary}
-            placeholder="Results-driven software engineer with 5+ years delivering scalable web applications."
-            rows={4}
-          />
+          <div className="relative">
+            <TextareaField
+              label="Professional Summary"
+              value={summary}
+              onChange={setSummary}
+              placeholder="Results-driven software engineer with 5+ years delivering scalable web applications."
+              rows={4}
+            />
+            <button
+              type="button"
+              onClick={improveSummary}
+              disabled={improvingSummary}
+              className="absolute top-8 right-2 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-md transition-all hover:scale-110 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+              title="Improve with AI"
+            >
+              {improvingSummary ? (
+                <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+              )}
+            </button>
+          </div>
         );
       case 'experience':
         return (
@@ -512,7 +597,7 @@ export default function CVBuilderPage() {
                   </div>
                   <InputField label="Email *" value={personal.email} onChange={(value) => setPersonalField('email', value)} placeholder="you@email.com" type="email" />
                   <InputField label="Phone" value={personal.phone} onChange={(value) => setPersonalField('phone', value)} placeholder="+234 800 000 0000" />
-                  <InputField label="Location" value={personal.location} onChange={(value) => setPersonalField('location', value)} placeholder="Abuja, Nigeria" />
+                  <InputField label="Address / Location" value={personal.location} onChange={(value) => setPersonalField('location', value)} placeholder="12 Marina Road, Lagos or leave blank" />
                   <InputField label="LinkedIn" value={personal.linkedin} onChange={(value) => setPersonalField('linkedin', value)} placeholder="linkedin.com/in/you" />
                   <div className="sm:col-span-2">
                     <InputField label="Website / Portfolio" value={personal.website} onChange={(value) => setPersonalField('website', value)} placeholder="yourportfolio.com" />
@@ -634,13 +719,6 @@ export default function CVBuilderPage() {
                       >
                         {copy.selectDesign}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => download(variant)}
-                        className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50"
-                      >
-                        {copy.downloadSource}
-                      </button>
                     </div>
                   </div>
                 );
@@ -690,15 +768,41 @@ export default function CVBuilderPage() {
                     </svg>
                     {copy.seeAllDesigns}
                   </button>
+                </div>
+              </div>
+
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Choose your download format</p>
+                  <p className="text-xs text-slate-500">Export the selected Groq-written CV as a professionally styled PDF or DOCX.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                    {(['pdf', 'docx'] as const).map((format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => setExportFormat(format)}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                          exportFormat === format
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {format.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => download(selected)}
-                    className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:scale-105 ${color.btn}`}
+                    onClick={() => exportVariant(selected, selectedTemplateId)}
+                    disabled={exporting}
+                    className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 ${color.btn}`}
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    {copy.downloadSource}
+                    {exporting ? `Exporting ${exportFormat.toUpperCase()}...` : `Download ${exportFormat.toUpperCase()}`}
                   </button>
                 </div>
               </div>

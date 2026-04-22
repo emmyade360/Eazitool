@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLanguage } from './language-context';
@@ -19,7 +19,7 @@ const staticItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { language, t } = useLanguage();
-  const toolCategories = getToolCategories(language);
+  const toolCategories = useMemo(() => getToolCategories(language), [language]);
   const [toolsOpen, setToolsOpen] = useState(() => pathname.startsWith('/tools'));
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -31,14 +31,23 @@ export default function Sidebar() {
   );
 
   useEffect(() => {
-    setOpenCategories(
-      Object.fromEntries(
-        toolCategories.map((cat) => [
-          cat.category,
-          cat.items.some((item) => pathname === item.href.split('?')[0]),
-        ])
-      )
+    const nextOpenCategories = Object.fromEntries(
+      toolCategories.map((cat) => [
+        cat.category,
+        cat.items.some((item) => pathname === item.href.split('?')[0]),
+      ])
     );
+
+    setOpenCategories((current) => {
+      const currentKeys = Object.keys(current);
+      const nextKeys = Object.keys(nextOpenCategories);
+
+      const isSame =
+        currentKeys.length === nextKeys.length &&
+        nextKeys.every((key) => current[key] === nextOpenCategories[key]);
+
+      return isSame ? current : nextOpenCategories;
+    });
   }, [pathname, toolCategories]);
 
   return (

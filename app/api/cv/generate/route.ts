@@ -4,21 +4,17 @@ import { headers } from 'next/headers';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ─── Rate limiting ─────────────────────────────────────────────────────────────
-// Simple in-memory store: userIP → [timestamp1, timestamp2, ...]
-// Allows 1 request per 5 minutes (300,000 ms) per user
 const rateLimitStore = new Map<string, number[]>();
+const RATE_LIMIT_MAX = 1;
+const RATE_LIMIT_WINDOW = 5 * 60 * 1000;
+const RATE_LIMIT_CLEANUP_INTERVAL = 60 * 1000;
 
-const RATE_LIMIT_MAX = 1;        // max requests
-const RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 minutes in ms
-const RATE_LIMIT_CLEANUP_INTERVAL = 60 * 1000; // cleanup every 60s
-
-// Perform periodic cleanup of old entries
 function cleanupOldEntries() {
   const now = Date.now();
   const cutoff = now - RATE_LIMIT_WINDOW;
+
   for (const [ip, timestamps] of rateLimitStore.entries()) {
-    const recent = timestamps.filter(t => t > cutoff);
+    const recent = timestamps.filter((timestamp) => timestamp > cutoff);
     if (recent.length === 0) {
       rateLimitStore.delete(ip);
     } else {
@@ -27,23 +23,17 @@ function cleanupOldEntries() {
   }
 }
 
-// Run cleanup on startup and every interval
 cleanupOldEntries();
 setInterval(cleanupOldEntries, RATE_LIMIT_CLEANUP_INTERVAL);
 
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number; reset: number } {
   const now = Date.now();
   const cutoff = now - RATE_LIMIT_WINDOW;
-
-  // Get or create entry for this IP
   const timestamps = rateLimitStore.get(ip) ?? [];
-
-  // Filter to window
-  const recent = timestamps.filter(t => t > cutoff);
+  const recent = timestamps.filter((timestamp) => timestamp > cutoff);
   const remaining = Math.max(0, RATE_LIMIT_MAX - recent.length);
   const reset = recent.length >= RATE_LIMIT_MAX ? Math.min(...recent) + RATE_LIMIT_WINDOW : 0;
 
-  // Update store
   if (remaining > 0) {
     recent.push(now);
     rateLimitStore.set(ip, recent);
@@ -56,19 +46,17 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number; rese
   };
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type Experience = { company: string; role: string; duration: string; bullets: string };
-type Education  = { institution: string; degree: string; year: string };
+type Education = { institution: string; degree: string; year: string };
 
 interface CVPayload {
   name: string;
   email: string;
   phone: string;
-  location: string;
+  location?: string;
   linkedin?: string;
   website?: string;
-  sections: string[];            // ordered list of enabled section ids
+  sections: string[];
   summary?: string;
   experience?: Experience[];
   education?: Education[];
@@ -87,16 +75,16 @@ const STYLE_INSTRUCTION: Record<string, string> = {
   classic: `
 Style: Classic / Traditional
 - Strict chronological order, clean hierarchy
-- Formal, neutral language — no first-person pronouns
+- Formal, neutral language - no first-person pronouns
 - Section headers in ALL CAPS
 - Conservative tone suited to finance, law, corporate, or government roles
 - Emphasise stability, tenure, and credentials`,
 
   impact: `
 Style: Impact / Modern
-- Lead every experience bullet with a strong action verb (Spearheaded, Engineered, Grew…)
-- Quantify EVERY achievement with real or plausible metrics (%, $, users, time saved)
-- Tight, scannable bullets — max 1.5 lines each
+- Lead every experience bullet with a strong action verb (Spearheaded, Engineered, Grew)
+- Quantify every real achievement only when the user provided enough information to support it
+- Tight, scannable bullets - max 1.5 lines each
 - Designed to pass ATS and impress tech, SaaS, or startup hiring teams
 - Section headers in Title Case`,
 
@@ -109,51 +97,66 @@ Style: Story-Driven / Distinctive
 - Section headers in Title Case`,
 };
 
-function buildPrompt(p: CVPayload): string {
+function buildPrompt(payload: CVPayload): string {
+  const candidateLines = [
+    `Name: ${payload.name}`,
+    `Email: ${payload.email}`,
+    payload.phone?.trim() ? `Phone: ${payload.phone.trim()}` : '',
+    payload.location?.trim() ? `Address / Location: ${payload.location.trim()}` : '',
+    payload.linkedin?.trim() ? `LinkedIn: ${payload.linkedin.trim()}` : '',
+    payload.website?.trim() ? `Website: ${payload.website.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
   const sectionContent: Record<string, string> = {
-    summary:        p.summary        ? `PROFESSIONAL SUMMARY:\n${p.summary}` : '',
-    experience:     p.experience?.length
-      ? `WORK EXPERIENCE:\n${p.experience.map(e => `${e.role} at ${e.company} (${e.duration})\n${e.bullets}`).join('\n\n')}`
+    summary: payload.summary?.trim() ? `PROFESSIONAL SUMMARY:\n${payload.summary.trim()}` : '',
+    experience: payload.experience?.length
+      ? `WORK EXPERIENCE:\n${payload.experience
+          .filter((item) => item.company.trim() || item.role.trim() || item.duration.trim() || item.bullets.trim())
+          .map((item) => `${item.role} at ${item.company} (${item.duration})\n${item.bullets}`)
+          .join('\n\n')}`
       : '',
-    education:      p.education?.length
-      ? `EDUCATION:\n${p.education.map(e => `${e.degree} — ${e.institution} (${e.year})`).join('\n')}`
+    education: payload.education?.length
+      ? `EDUCATION:\n${payload.education
+          .filter((item) => item.institution.trim() || item.degree.trim() || item.year.trim())
+          .map((item) => `${item.degree} - ${item.institution} (${item.year})`)
+          .join('\n')}`
       : '',
-    skills:         p.skills         ? `SKILLS:\n${p.skills}`              : '',
-    certifications: p.certifications ? `CERTIFICATIONS:\n${p.certifications}` : '',
-    projects:       p.projects       ? `PROJECTS:\n${p.projects}`           : '',
-    languages:      p.languages      ? `LANGUAGES:\n${p.languages}`         : '',
-    volunteer:      p.volunteer      ? `VOLUNTEER WORK:\n${p.volunteer}`    : '',
-    awards:         p.awards         ? `AWARDS & ACHIEVEMENTS:\n${p.awards}`: '',
-    publications:   p.publications   ? `PUBLICATIONS:\n${p.publications}`   : '',
-    references:     p.references     ? `REFERENCES:\n${p.references}`       : '',
+    skills: payload.skills?.trim() ? `SKILLS:\n${payload.skills.trim()}` : '',
+    certifications: payload.certifications?.trim() ? `CERTIFICATIONS:\n${payload.certifications.trim()}` : '',
+    projects: payload.projects?.trim() ? `PROJECTS:\n${payload.projects.trim()}` : '',
+    languages: payload.languages?.trim() ? `LANGUAGES:\n${payload.languages.trim()}` : '',
+    volunteer: payload.volunteer?.trim() ? `VOLUNTEER WORK:\n${payload.volunteer.trim()}` : '',
+    awards: payload.awards?.trim() ? `AWARDS & ACHIEVEMENTS:\n${payload.awards.trim()}` : '',
+    publications: payload.publications?.trim() ? `PUBLICATIONS:\n${payload.publications.trim()}` : '',
+    references: payload.references?.trim() ? `REFERENCES:\n${payload.references.trim()}` : '',
   };
 
-  const orderedContent = p.sections
-    .map(id => sectionContent[id])
+  const orderedContent = payload.sections
+    .map((id) => sectionContent[id])
     .filter(Boolean)
     .join('\n\n');
 
   return `You are an expert ATS-optimised resume writer. Write a single, complete, professional CV in clean Markdown.
 
-${STYLE_INSTRUCTION[p.style]}
+${STYLE_INSTRUCTION[payload.style]}
 
 CRITICAL RULES:
-- Output ONLY the CV content — no preamble, no "Here is your CV", no commentary
-- Use ## for main section headings
-- Use **bold** for job titles and company names
-- Bullet points must start with strong action verbs
-- No tables, columns, images, or special symbols — pure ATS-safe text
-- Include ALL the sections provided below, in the order given
-- Do NOT invent information not provided — expand phrasing only
+- Output only the CV content. No preamble, no commentary.
+- Use ## for main section headings.
+- Use **bold** for job titles and company names.
+- Bullet points must start with strong action verbs.
+- No tables, columns, images, or special symbols - pure ATS-safe text.
+- Include only the sections provided below, in the order given.
+- Do not invent information that was not provided.
+- If a field or section is blank, omit it completely.
+- Never guess or fabricate an address, location, phone number, website, LinkedIn URL, dates, institutions, employers, or metrics.
+- Do not add placeholders such as "N/A", "Available on request", or guessed city/country values.
 
 ---
 CANDIDATE:
-Name: ${p.name}
-Email: ${p.email}
-Phone: ${p.phone}
-Location: ${p.location}
-${p.linkedin ? `LinkedIn: ${p.linkedin}` : ''}
-${p.website  ? `Website: ${p.website}`   : ''}
+${candidateLines}
 
 ${orderedContent}
 ---
@@ -162,8 +165,6 @@ Write the complete CV now:`;
 }
 
 export async function POST(req: NextRequest) {
-  // ─── Rate limit check ────────────────────────────────────────────────────────
-  // Get client IP (respects X-Forwarded-For when behind a proxy)
   const reqHeaders = await headers();
   const forwardedFor = reqHeaders.get('x-forwarded-for');
   const ip = (forwardedFor ? forwardedFor.split(',')[0]?.trim() : null) ?? 'unknown';
@@ -186,37 +187,55 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const payload = await req.json() as CVPayload;
-
-    // Generate all 3 styles in parallel
+    const payload = (await req.json()) as CVPayload;
     const styles: Array<'classic' | 'impact' | 'story'> = ['classic', 'impact', 'story'];
 
     const results = await Promise.all(
-      styles.map(style =>
-        groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: buildPrompt({ ...payload, style }) }],
-          temperature: style === 'story' ? 0.55 : 0.25,
-          max_tokens: 2500,
-        }).then(r => ({
-          style,
-          content: r.choices[0]?.message?.content ?? '',
-        }))
+      styles.map((style) =>
+        groq.chat.completions
+          .create({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: buildPrompt({ ...payload, style }) }],
+            temperature: style === 'story' ? 0.55 : 0.25,
+            max_tokens: 2500,
+          })
+          .then((result) => ({
+            style,
+            content: result.choices[0]?.message?.content ?? '',
+          }))
       )
     );
 
     const variants = [
-      { style: 'classic', title: 'Classic',        badge: 'Traditional',    description: 'Formal, structured, and universally accepted. Ideal for corporate, legal, finance, and government roles.',    color: 'blue'   },
-      { style: 'impact',  title: 'Impact',          badge: 'Data-Driven',    description: 'Metric-heavy, action-verb-led bullets. Built for ATS and designed to impress in tech, sales, and startups.', color: 'violet' },
-      { style: 'story',   title: 'Story-Driven',    badge: 'Distinctive',    description: 'Narrative arc, compelling language. Perfect for leadership, creative, or senior roles where voice matters.',  color: 'emerald'},
-    ].map(meta => ({
+      {
+        style: 'classic',
+        title: 'Classic',
+        badge: 'Traditional',
+        description: 'Formal, structured, and universally accepted. Ideal for corporate, legal, finance, and government roles.',
+        color: 'blue',
+      },
+      {
+        style: 'impact',
+        title: 'Impact',
+        badge: 'Data-Driven',
+        description: 'Metric-heavy, action-verb-led bullets. Built for ATS and designed to impress in tech, sales, and startups.',
+        color: 'violet',
+      },
+      {
+        style: 'story',
+        title: 'Story-Driven',
+        badge: 'Distinctive',
+        description: 'Narrative arc, compelling language. Perfect for leadership, creative, or senior roles where voice matters.',
+        color: 'emerald',
+      },
+    ].map((meta) => ({
       ...meta,
-      content: results.find(r => r.style === meta.style)?.content ?? '',
+      content: results.find((result) => result.style === meta.style)?.content ?? '',
     }));
 
     return NextResponse.json({ variants });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Generation failed';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Generation failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
