@@ -2,25 +2,55 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1e3a8a;
+  --brand-blue: #2563eb;
+  --brand-white: #ffffff;
+  --brand-light: #eff6ff;
+  --brand-hover: #1d4ed8;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand-blue);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background: var(--brand-white);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eff6ff;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #93c5fd;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #60a5fa;
 }
