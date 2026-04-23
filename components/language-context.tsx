@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -37,21 +38,23 @@ export function LanguageProvider({
   initialLanguage: LanguageCode;
 }) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
+  const isInitialized = useRef(false);
 
   useEffect(() => {
+    if (isInitialized.current) return;
+    isInitialized.current = true;
+
     const saved = window.localStorage.getItem(STORAGE_KEY) as LanguageCode | null;
     if (saved && LANGUAGE_OPTIONS.some((item) => item.code === saved)) {
-      if (saved !== language) {
-        setLanguage(saved);
-      }
+      setLanguage(saved);
       return;
     }
 
     const detected = detectPreferredLanguage(window.navigator.languages);
-    if (detected !== language) {
+    if (detected !== initialLanguage) {
       setLanguage(detected);
     }
-  }, [language]);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, language);

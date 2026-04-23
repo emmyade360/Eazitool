@@ -9,8 +9,11 @@ import {
   type ResumeDocument,
   type ResumeSection,
 } from '@/lib/cv-document';
+import { PROFESSIONAL_TEMPLATE_META, type ProfessionalTemplateId } from '@/lib/cv-templates';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 export { CV_TEMPLATE_IDS, CV_TEMPLATE_META, type CVTemplateId, type CVVariant } from '@/lib/cv-document';
+export { PROFESSIONAL_TEMPLATE_META, type ProfessionalTemplateId } from '@/lib/cv-templates';
 
 function ResumeSectionBlock({
   section,
@@ -31,24 +34,24 @@ function ResumeSectionBlock({
         {section.title}
       </h4>
       <div className="mt-3 space-y-3">
-        {section.paragraphs.map((paragraph) => (
-          <p key={paragraph} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
+        {section.paragraphs.map((paragraph, index) => (
+          <p key={`p-${index}`} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
             {paragraph}
           </p>
         ))}
 
         {section.bullets.length > 0 && (
           <ul className="space-y-1.5 pl-4">
-            {section.bullets.map((bullet) => (
-              <li key={bullet} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
+            {section.bullets.map((bullet, index) => (
+              <li key={`bullet-${index}`} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
                 {bullet}
               </li>
             ))}
           </ul>
         )}
 
-        {section.entries.map((entry) => (
-          <article key={`${entry.heading}-${entry.meta ?? ''}`} className="space-y-1.5">
+        {section.entries.map((entry, index) => (
+          <article key={`entry-${index}-${entry.heading}`} className="space-y-1.5">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
               <h5 className={`text-sm font-semibold ${accentClass}`}>{entry.heading}</h5>
               {entry.meta && (
@@ -59,8 +62,8 @@ function ResumeSectionBlock({
             </div>
             {entry.bullets.length > 0 && (
               <ul className="space-y-1.5 pl-4">
-                {entry.bullets.map((bullet) => (
-                  <li key={bullet} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
+                {entry.bullets.map((bullet, bulletIndex) => (
+                  <li key={`entry-bullet-${bulletIndex}`} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
                     {bullet}
                   </li>
                 ))}
@@ -84,8 +87,8 @@ function ContactRow({
 
   return (
     <div className={className}>
-      {contacts.map((contact) => (
-        <span key={contact}>{contact}</span>
+      {contacts.map((contact, index) => (
+        <span key={`contact-${index}`}>{contact}</span>
       ))}
     </div>
   );
@@ -137,9 +140,9 @@ function renderSidebar(resume: ResumeDocument, compact: boolean) {
             </div>
           )}
           <div className="mt-6 space-y-4">
-            {(compact ? sidebarSections.slice(0, 2) : sidebarSections).map((section) => (
+            {(compact ? sidebarSections.slice(0, 2) : sidebarSections).map((section, index) => (
               <ResumeSectionBlock
-                key={section.title}
+                key={`sidebar-${section.title}-${index}`}
                 section={section}
                 compact={compact}
                 accentClass="text-white"
@@ -151,9 +154,9 @@ function renderSidebar(resume: ResumeDocument, compact: boolean) {
         </aside>
         <main className="p-6 text-slate-900">
           <div className="space-y-4">
-            {mainSections.slice(0, compact ? 3 : undefined).map((section) => (
+            {mainSections.slice(0, compact ? 3 : undefined).map((section, index) => (
               <ResumeSectionBlock
-                key={section.title}
+                key={`main-${section.title}-${index}`}
                 section={section}
                 compact={compact}
                 accentClass="text-blue-800"
@@ -185,9 +188,9 @@ function renderEditorial(resume: ResumeDocument, compact: boolean) {
         </div>
       )}
       <div className="mt-6 space-y-4">
-        {resume.sections.slice(0, compact ? 3 : undefined).map((section) => (
+        {resume.sections.slice(0, compact ? 3 : undefined).map((section, index) => (
           <ResumeSectionBlock
-            key={section.title}
+            key={`editorial-${section.title}-${index}`}
             section={section}
             compact={compact}
             accentClass="text-rose-700"
@@ -210,9 +213,9 @@ function renderSpotlight(resume: ResumeDocument, compact: boolean) {
       </div>
       <div className="p-6 text-slate-900">
         <div className="space-y-4">
-          {resume.sections.slice(0, compact ? 3 : undefined).map((section) => (
+          {resume.sections.slice(0, compact ? 3 : undefined).map((section, index) => (
             <ResumeSectionBlock
-              key={section.title}
+              key={`spotlight-${section.title}-${index}`}
               section={section}
               compact={compact}
               accentClass="text-slate-900"
@@ -241,8 +244,8 @@ function renderMinimalGrid(resume: ResumeDocument, compact: boolean) {
         </div>
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        {resume.sections.slice(0, compact ? 4 : undefined).map((section) => (
-          <div key={section.title} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+        {resume.sections.slice(0, compact ? 4 : undefined).map((section, index) => (
+          <div key={`minimal-${section.title}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <ResumeSectionBlock
               section={section}
               compact={compact}
@@ -267,9 +270,9 @@ function renderContrast(resume: ResumeDocument, compact: boolean) {
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
-            {resume.sections.slice(0, compact ? 3 : undefined).map((section) => (
+            {resume.sections.slice(0, compact ? 3 : undefined).map((section, index) => (
               <ResumeSectionBlock
-                key={section.title}
+                key={`contrast-${section.title}-${index}`}
                 section={section}
                 compact={compact}
                 accentClass="text-cyan-300"
@@ -292,15 +295,46 @@ function renderContrast(resume: ResumeDocument, compact: boolean) {
   );
 }
 
+export function HtmlTemplatePreview({
+  htmlTemplate,
+  compact = false,
+}: {
+  htmlTemplate: string;
+  compact?: boolean;
+}) {
+  const sanitizedHtml = sanitizeHtml(htmlTemplate);
+
+  return (
+    <div
+      className={`h-full rounded-[1.75rem] border border-slate-200 bg-white shadow-sm ${compact ? 'scale-[0.62] origin-top' : ''}`}
+      style={{ overflow: 'auto' }}
+    >
+      <iframe
+        srcDoc={sanitizedHtml}
+        title="CV Template Preview"
+        className="w-full h-full rounded-[1.75rem]"
+        style={{ border: 'none', minHeight: compact ? '800px' : '1000px' }}
+      />
+    </div>
+  );
+}
+
 export function CVPreviewCard({
   variant,
   templateId = 'executive',
   compact = false,
+  htmlTemplate,
 }: {
   variant: CVVariant;
   templateId?: CVTemplateId;
   compact?: boolean;
+  htmlTemplate?: string;
 }) {
+  // If HTML template is provided, render it
+  if (htmlTemplate) {
+    return <HtmlTemplatePreview htmlTemplate={htmlTemplate} compact={compact} />;
+  }
+
   const resume = parseResumeMarkdown(variant.content);
 
   switch (templateId) {

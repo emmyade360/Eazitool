@@ -7,8 +7,11 @@ import {
   CVPreviewCard,
   CV_TEMPLATE_IDS,
   CV_TEMPLATE_META,
+  PROFESSIONAL_TEMPLATE_META,
   type CVTemplateId,
   type CVVariant,
+  type ProfessionalTemplateId,
+  HtmlTemplatePreview,
 } from '@/components/cv-preview';
 
 type Experience = { company: string; role: string; duration: string; bullets: string };
@@ -223,6 +226,20 @@ export default function CVBuilderPage() {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'docx'>('pdf');
   const [exporting, setExporting] = useState(false);
   const [improvingSummary, setImprovingSummary] = useState(false);
+  const [templateType, setTemplateType] = useState<'standard' | 'professional'>('standard');
+  const [professionalTemplates, setProfessionalTemplates] = useState<Array<{
+    id: ProfessionalTemplateId;
+    label: string;
+    html: string;
+  }>>([]);
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<ProfessionalTemplateId>('harvard');
+  const [generatingProfessional, setGeneratingProfessional] = useState(false);
+  const [selectedProfessionalTemplate, setSelectedProfessionalTemplate] = useState<{
+    id: ProfessionalTemplateId;
+    label: string;
+    html: string;
+  } | null>(null);
+  const [profExportFormat, setProfExportFormat] = useState<'pdf' | 'docx'>('pdf');
 
   function setPersonalField(key: keyof typeof personal, value: string) {
     setPersonal((current) => ({ ...current, [key]: value }));
@@ -262,6 +279,7 @@ export default function CVBuilderPage() {
     setLoading(true);
     setVariants([]);
     setSelected(null);
+    setProfessionalTemplates([]);
 
     try {
       const response = await fetch('/api/cv/generate', {
@@ -390,6 +408,68 @@ export default function CVBuilderPage() {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setImprovingSummary(false);
+    }
+  }
+
+  async function generateProfessionalTemplates() {
+    if (!personal.name.trim()) {
+      setError('Please enter your name before generating professional templates.');
+      return;
+    }
+
+    setError('');
+    setGeneratingProfessional(true);
+    setProfessionalTemplates([]);
+
+    try {
+      const professionalIds: ProfessionalTemplateId[] = [
+        'harvard',
+        'stanford',
+        'mckinsey',
+        'google',
+        'mit',
+        'forbes',
+      ];
+
+      const results = await Promise.all(
+        professionalIds.map(async (templateId) => {
+          try {
+            const response = await fetch('/api/cv/generate-template', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: variants[0]?.content ?? '',
+                templateId,
+              }),
+            });
+
+            const data = (await response.json()) as { htmlTemplate?: string; error?: string };
+
+            if (data.error) {
+              console.error(`Failed to generate ${templateId}:`, data.error);
+              return null;
+            }
+
+            return {
+              id: templateId,
+              label: templateId.charAt(0).toUpperCase() + templateId.slice(1),
+              html: data.htmlTemplate ?? '',
+            };
+          } catch (err) {
+            console.error(`Error generating ${templateId}:`, err);
+            return null;
+          }
+        })
+      );
+
+      const validResults = results.filter((r) => r !== null);
+      setProfessionalTemplates(validResults);
+      setTemplateType('professional');
+      setStep(2);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate professional templates');
+    } finally {
+      setGeneratingProfessional(false);
     }
   }
 
@@ -662,6 +742,44 @@ export default function CVBuilderPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  {(['standard', 'professional'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setTemplateType(type)}
+                      className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                        templateType === type
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {type === 'standard' ? 'Standard' : 'Professional'}
+                    </button>
+                  ))}
+                </div>
+                {templateType === 'professional' && professionalTemplates.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={generateProfessionalTemplates}
+                    disabled={generatingProfessional || !variants.length}
+                    className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-all hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {generatingProfessional ? (
+                      <>
+                        <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        Generate Professional
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={reshuffleTemplates}
@@ -685,45 +803,107 @@ export default function CVBuilderPage() {
               </div>
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-3">
-              {variants.map((variant) => {
-                const color = COLORS[variant.color as keyof typeof COLORS] ?? COLORS.blue;
-                const templateId = templateAssignments[variant.style] ?? 'executive';
-                const templateMeta = CV_TEMPLATE_META[templateId];
+            {templateType === 'standard' ? (
+              <div className="grid gap-5 lg:grid-cols-3">
+                {variants.map((variant) => {
+                  const color = COLORS[variant.color as keyof typeof COLORS] ?? COLORS.blue;
+                  const templateId = templateAssignments[variant.style] ?? 'executive';
+                  const templateMeta = CV_TEMPLATE_META[templateId];
 
-                return (
-                  <div key={variant.style} className={`flex flex-col overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all hover:shadow-lg ${color.border}`}>
-                    <div className={`border-b px-5 py-4 ${color.bg} ${color.border}`}>
-                      <div className="mb-1 flex items-center justify-between">
-                        <h3 className={`text-base font-bold ${color.text}`}>{templateMeta.label}</h3>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${color.badge}`}>{variant.title}</span>
+                  return (
+                    <div key={variant.style} className={`flex flex-col overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all hover:shadow-lg ${color.border}`}>
+                      <div className={`border-b px-5 py-4 ${color.bg} ${color.border}`}>
+                        <div className="mb-1 flex items-center justify-between">
+                          <h3 className={`text-base font-bold ${color.text}`}>{templateMeta.label}</h3>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${color.badge}`}>{variant.title}</span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-slate-500">{templateMeta.blurb}</p>
                       </div>
-                      <p className="text-xs leading-relaxed text-slate-500">{templateMeta.blurb}</p>
-                    </div>
 
-                    <div className="flex-1 p-5">
-                      <div className="h-[26rem] overflow-hidden rounded-[1.5rem] bg-slate-100 p-3">
-                        <div className="origin-top scale-[0.62] sm:scale-[0.68]">
-                          <div className="w-[38rem]">
-                            <CVPreviewCard variant={variant} templateId={templateId} compact />
+                      <div className="flex-1 p-5">
+                        <div className="h-[26rem] overflow-hidden rounded-[1.5rem] bg-slate-100 p-3">
+                          <div className="origin-top scale-[0.62] sm:scale-[0.68]">
+                            <div className="w-[38rem]">
+                              <CVPreviewCard variant={variant} templateId={templateId} compact />
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex flex-col gap-2 px-5 pb-5">
-                      <button
-                        type="button"
-                        onClick={() => chooseVariant(variant)}
-                        className={`w-full rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${color.btn}`}
-                      >
-                        {copy.selectDesign}
-                      </button>
+                      <div className="flex flex-col gap-2 px-5 pb-5">
+                        <button
+                          type="button"
+                          onClick={() => chooseVariant(variant)}
+                          className={`w-full rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${color.btn}`}
+                        >
+                          {copy.selectDesign}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div>
+                {generatingProfessional ? (
+                  <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-12">
+                    <div className="text-center">
+                      <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
+                      <p className="text-sm font-medium text-slate-600">Generating professional templates...</p>
+                      <p className="mt-1 text-xs text-slate-400">This may take a minute</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ) : professionalTemplates.length > 0 ? (
+                  <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+                    {professionalTemplates.map((template) => (
+                      <div key={template.id} className="flex flex-col overflow-hidden rounded-2xl border-2 border-violet-200 bg-white shadow-sm transition-all hover:shadow-lg">
+                        <div className="border-b border-violet-200 bg-violet-50 px-5 py-4">
+                          <div className="mb-1 flex items-center justify-between">
+                            <h3 className="text-base font-bold text-violet-700">{PROFESSIONAL_TEMPLATE_META[template.id as ProfessionalTemplateId]?.label ?? template.label}</h3>
+                          </div>
+                          <p className="text-xs leading-relaxed text-slate-500">
+                            {PROFESSIONAL_TEMPLATE_META[template.id as ProfessionalTemplateId]?.blurb}
+                          </p>
+                        </div>
+
+                        <div className="flex-1 p-5">
+                          <div className="h-[26rem] overflow-hidden rounded-[1.5rem] bg-slate-100 p-3">
+                            <div className="origin-top scale-[0.62] sm:scale-[0.68]">
+                              <div className="w-[38rem]">
+                                <HtmlTemplatePreview htmlTemplate={template.html} compact />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                          <div className="flex flex-col gap-2 px-5 pb-5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const found = professionalTemplates.find(t => t.id === template.id);
+                                if (found) {
+                                  setSelectedProfessionalTemplate(found);
+                                  setTemplateType('professional');
+                                  setStep(3);
+                                }
+                              }}
+                              className="w-full rounded-xl bg-violet-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-violet-700"
+                            >
+                              Select Template
+                            </button>
+                          </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center">
+                    <p className="text-sm text-slate-400">
+                      Click "Generate Professional" to create industry-standard CV templates powered by Groq AI.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <p className="mt-6 text-center text-xs text-slate-400">
               {copy.designHint}
@@ -731,121 +911,252 @@ export default function CVBuilderPage() {
           </div>
         )}
 
-        {step === 3 && selected && (() => {
-          const color = COLORS[selected.color as keyof typeof COLORS] ?? COLORS.blue;
-          const templateMeta = CV_TEMPLATE_META[selectedTemplateId];
+        {step === 3 && (templateType === 'standard' ? (
+          selected && (() => {
+            const color = COLORS[selected.color as keyof typeof COLORS] ?? COLORS.blue;
+            const templateMeta = CV_TEMPLATE_META[selectedTemplateId];
 
-          return (
-            <div>
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${color.badge}`}>{selected.title}</span>
+            return (
+              <div>
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${color.badge}`}>{selected.title}</span>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-800">{templateMeta.label}</h2>
+                      <p className="text-xs text-slate-400">{templateMeta.blurb}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextAssignments = createTemplateAssignments(variants, templateAssignments);
+                        setTemplateAssignments(nextAssignments);
+                        setSelectedTemplateId(nextAssignments[selected.style] ?? 'executive');
+                      }}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      {copy.reshuffleThisDesign}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      {copy.seeAllDesigns}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div>
-                    <h2 className="text-xl font-bold text-slate-800">{templateMeta.label}</h2>
-                    <p className="text-xs text-slate-400">{templateMeta.blurb}</p>
+                    <p className="text-sm font-semibold text-slate-800">Choose your download format</p>
+                    <p className="text-xs text-slate-500">Export the selected Groq-written CV as a professionally styled PDF or DOCX.</p>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextAssignments = createTemplateAssignments(variants, templateAssignments);
-                      setTemplateAssignments(nextAssignments);
-                      setSelectedTemplateId(nextAssignments[selected.style] ?? 'executive');
-                    }}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                  >
-                    {copy.reshuffleThisDesign}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    {copy.seeAllDesigns}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Choose your download format</p>
-                  <p className="text-xs text-slate-500">Export the selected Groq-written CV as a professionally styled PDF or DOCX.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                    {(['pdf', 'docx'] as const).map((format) => (
-                      <button
-                        key={format}
-                        type="button"
-                        onClick={() => setExportFormat(format)}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                          exportFormat === format
-                            ? 'bg-white text-slate-900 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        {format.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => exportVariant(selected, selectedTemplateId)}
-                    disabled={exporting}
-                    className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 ${color.btn}`}
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    {exporting ? `Exporting ${exportFormat.toUpperCase()}...` : `Download ${exportFormat.toUpperCase()}`}
-                  </button>
-                </div>
-              </div>
-
-              <div className={`overflow-hidden rounded-2xl border-2 shadow-sm ${color.border}`}>
-                <div className={`flex items-center gap-2 border-b px-6 py-3 ${color.bg} ${color.border}`}>
-                  <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                  <span className={`ml-2 text-xs font-semibold ${color.text}`}>{personal.name} - {templateMeta.label} {copy.previewSuffix}</span>
-                </div>
-                <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
-                  <CVPreviewCard variant={selected} templateId={selectedTemplateId} />
-                </div>
-              </div>
-
-              <div className="mt-6 rounded-xl border border-slate-200 bg-slate-100 p-4">
-                <p className="mb-3 text-xs font-semibold text-slate-500">{copy.switchDirection}</p>
-                <div className="flex flex-wrap gap-2">
-                  {variants
-                    .filter((variant) => variant.style !== selected.style)
-                    .map((variant) => {
-                      const variantColor = COLORS[variant.color as keyof typeof COLORS] ?? COLORS.blue;
-
-                      return (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                      {(['pdf', 'docx'] as const).map((format) => (
                         <button
-                          key={variant.style}
+                          key={format}
                           type="button"
-                          onClick={() => chooseVariant(variant)}
-                          className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold transition-opacity hover:opacity-80 ${variantColor.badge} ${variantColor.border}`}
+                          onClick={() => setExportFormat(format)}
+                          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                            exportFormat === format
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
                         >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          {variant.title}
+                          {format.toUpperCase()}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => exportVariant(selected, selectedTemplateId)}
+                      disabled={exporting}
+                      className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 ${color.btn}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {exporting ? `Exporting ${exportFormat.toUpperCase()}...` : `Download ${exportFormat.toUpperCase()}`}
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`overflow-hidden rounded-2xl border-2 shadow-sm ${color.border}`}>
+                  <div className={`flex items-center gap-2 border-b px-6 py-3 ${color.bg} ${color.border}`}>
+                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+                    <span className={`ml-2 text-xs font-semibold ${color.text}`}>{personal.name} - {templateMeta.label} {copy.previewSuffix}</span>
+                  </div>
+                  <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
+                    <CVPreviewCard variant={selected} templateId={selectedTemplateId} />
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-xl border border-slate-200 bg-slate-100 p-4">
+                  <p className="mb-3 text-xs font-semibold text-slate-500">{copy.switchDirection}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {variants
+                      .filter((variant) => variant.style !== selected.style)
+                      .map((variant) => {
+                        const variantColor = COLORS[variant.color as keyof typeof COLORS] ?? COLORS.blue;
+
+                        return (
+                          <button
+                            key={variant.style}
+                            type="button"
+                            onClick={() => chooseVariant(variant)}
+                            className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold transition-opacity hover:opacity-80 ${variantColor.badge} ${variantColor.border}`}
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            {variant.title}
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()
+        ) : (
+          selectedProfessionalTemplate && (() => {
+            const profMeta = PROFESSIONAL_TEMPLATE_META[selectedProfessionalTemplate.id];
+
+            return (
+              <div>
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-700">
+                      Professional
+                    </span>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-800">{profMeta?.label}</h2>
+                      <p className="text-xs text-slate-400">{profMeta?.blurb}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Back to Templates
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Choose your download format</p>
+                    <p className="text-xs text-slate-500">
+                      {profExportFormat === 'pdf' 
+                        ? 'Print the professional template as PDF.' 
+                        : 'Export the CV content as DOCX document.'}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                      {(['pdf', 'docx'] as const).map((format) => (
+                        <button
+                          key={format}
+                          type="button"
+                          onClick={() => setProfExportFormat(format)}
+                          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                            profExportFormat === format
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          {format.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setExporting(true);
+                        try {
+                          if (profExportFormat === 'pdf') {
+                            const printWindow = window.open('', '_blank');
+                            if (printWindow) {
+                              printWindow.document.write(selectedProfessionalTemplate.html);
+                              printWindow.document.close();
+                              setTimeout(() => {
+                                printWindow.print();
+                                setExporting(false);
+                              }, 500);
+                            }
+                          } else {
+                            const response = await fetch('/api/cv/export', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                content: variants[0]?.content ?? '',
+                                templateId: 'executive',
+                                format: 'docx',
+                                fileBaseName: `${personal.name || 'CV'}_${selectedProfessionalTemplate.id}`,
+                              }),
+                            });
+                            
+                            if (!response.ok) throw new Error('Export failed');
+                            
+                            const blob = await response.blob();
+                            const url = URL.createObjectURL(blob);
+                            const anchor = document.createElement('a');
+                            anchor.download = `${personal.name || 'CV'}_${selectedProfessionalTemplate.id}.docx`;
+                            anchor.href = url;
+                            anchor.click();
+                            URL.revokeObjectURL(url);
+                          }
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Export failed');
+                        } finally {
+                          if (profExportFormat === 'docx') {
+                            setExporting(false);
+                          }
+                        }
+                      }}
+                      disabled={exporting}
+                      className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {exporting ? 'Exporting...' : `Download ${profExportFormat.toUpperCase()}`}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border-2 border-violet-200 shadow-sm">
+                  <div className={`flex items-center gap-2 border-b border-violet-200 bg-violet-50 px-6 py-3`}>
+                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+                    <span className="ml-2 text-xs font-semibold text-violet-700">
+                      {personal.name} - {profMeta?.label} Preview
+                    </span>
+                  </div>
+                  <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
+                    <HtmlTemplatePreview htmlTemplate={selectedProfessionalTemplate.html} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        ))}
 
         {error && step !== 1 && <div className="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
       </div>
