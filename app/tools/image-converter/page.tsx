@@ -4,6 +4,9 @@ import { Suspense, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/components/language-context';
 import { IMAGE_CONVERTER_COPY } from '@/lib/i18n';
+import dynamic from 'next/dynamic';
+const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
+import { submitReview } from '@/lib/supabase';
 
 const FORMATS = ['jpeg', 'png', 'webp', 'avif', 'gif', 'tiff', 'heif'] as const;
 type Fmt = typeof FORMATS[number];
@@ -55,6 +58,8 @@ function ImageConverterInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewDocType, setReviewDocType] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const VALID_IMAGE_TYPES = new Set([
@@ -120,6 +125,8 @@ function ImageConverterInner() {
       anchor.click();
       URL.revokeObjectURL(url);
       setDone(true);
+      setReviewDocType(`image-${targetFmt}`);
+      setShowReviewModal(true);
 
       window.setTimeout(() => {
         setFile(null);
@@ -134,8 +141,16 @@ function ImageConverterInner() {
     }
   }
 
+  async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
+    try {
+      await submitReview({ document_type: review.documentType, rating: review.rating, comment: review.comment || undefined });
+    } catch {}
+    setShowReviewModal(false);
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 px-6 py-10">
+    <>
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
           <div className="mb-2 flex items-center gap-3">
@@ -294,6 +309,14 @@ function ImageConverterInner() {
         </div>
       </div>
     </div>
+
+    <ReviewModal
+      isOpen={showReviewModal}
+      onClose={() => setShowReviewModal(false)}
+      onSubmit={handleReviewSubmit}
+      documentType={reviewDocType}
+    />
+    </>
   );
 }
 

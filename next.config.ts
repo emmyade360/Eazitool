@@ -1,7 +1,54 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["sharp", "pdf-parse", "pdfkit", "mammoth", "docx", "canvas", "pdfjs-dist", "pdf-to-img"],
+  compress: true,
+  poweredByHeader: false,
+
+  serverExternalPackages: [
+    "sharp",
+    "pdf-parse",
+    "pdfkit",
+    "mammoth",
+    "docx",
+    "canvas",
+    "pdfjs-dist",
+    "pdf-to-img",
+    "pdf2json",
+  ],
+
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+  },
+
+  experimental: {
+    optimizePackageImports: ["@supabase/supabase-js", "groq-sdk"],
+  },
+
+  headers: async () => [
+    {
+      source: "/(.*)",
+      headers: [
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      ],
+    },
+    {
+      source: "/api/(.*)",
+      headers: [
+        { key: "Cache-Control", value: "no-store" },
+      ],
+    },
+    {
+      source: "/_next/static/(.*)",
+      headers: [
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    },
+  ],
 };
 
 export default nextConfig;

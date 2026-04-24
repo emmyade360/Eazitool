@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/components/language-context';
 import { IMAGE_UPSCALER_COPY } from '@/lib/i18n';
+import dynamic from 'next/dynamic';
+const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
+import { submitReview } from '@/lib/supabase';
 
 const SCALES = [2, 3, 4] as const;
 type Scale = typeof SCALES[number];
@@ -54,6 +57,8 @@ export default function ImageUpscalerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ w: number; h: number } | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewDocType, setReviewDocType] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   function readMeta(nextFile: File, dataUrl: string) {
@@ -162,6 +167,8 @@ export default function ImageUpscalerPage() {
       anchor.click();
       URL.revokeObjectURL(url);
       setDone({ w: outWidth, h: outHeight });
+      setReviewDocType(`image-upscale-${format}`);
+      setShowReviewModal(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -169,10 +176,18 @@ export default function ImageUpscalerPage() {
     }
   }
 
+  async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
+    try {
+      await submitReview({ document_type: review.documentType, rating: review.rating, comment: review.comment || undefined });
+    } catch {}
+    setShowReviewModal(false);
+  }
+
   const hasQuality = format === 'jpeg' || format === 'webp' || format === 'avif';
 
   return (
-    <div className="min-h-screen bg-slate-50 px-6 py-10">
+    <>
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
           <div className="mb-2 flex items-center gap-3">
@@ -362,5 +377,13 @@ export default function ImageUpscalerPage() {
         </div>
       </div>
     </div>
+
+    <ReviewModal
+      isOpen={showReviewModal}
+      onClose={() => setShowReviewModal(false)}
+      onSubmit={handleReviewSubmit}
+      documentType={reviewDocType}
+    />
+    </>
   );
 }

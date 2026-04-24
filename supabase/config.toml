@@ -1,0 +1,11 @@
+[project]
+id = "pmhrzlhygnecifrfnxvl"
+
+[api]
+port = 54321
+
+[db]
+port = 5432
+
+[storage]
+bucket = []

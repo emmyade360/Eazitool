@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/components/language-context';
 import { IMAGE_RESIZER_COPY } from '@/lib/i18n';
+import dynamic from 'next/dynamic';
+const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
+import { submitReview } from '@/lib/supabase';
 
 const OUTPUT_FORMATS = ['png', 'jpeg', 'webp', 'avif', 'tiff'] as const;
 type OutputFmt = typeof OUTPUT_FORMATS[number];
@@ -88,6 +91,8 @@ export default function ImageResizerPage() {
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ w: number; h: number } | null>(null);
   const [downloadInfo, setDownloadInfo] = useState<{ url: string; name: string } | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewDocType, setReviewDocType] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const aspectRef = useRef<number>(1);
 
@@ -293,6 +298,8 @@ export default function ImageResizerPage() {
 
       setDownloadInfo({ url, name: filename });
       setDone({ w: outWidth, h: outHeight });
+      setReviewDocType(`image-resize-${format}`);
+      setShowReviewModal(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -303,8 +310,16 @@ export default function ImageResizerPage() {
   const hasQuality = format === 'jpeg' || format === 'webp' || format === 'avif' || format === 'tiff';
   const activeFitDesc = FIT_OPTIONS.find((option) => option.value === fit)?.desc ?? '';
 
+  async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
+    try {
+      await submitReview({ document_type: review.documentType, rating: review.rating, comment: review.comment || undefined });
+    } catch {}
+    setShowReviewModal(false);
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-6">
+    <>
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -633,5 +648,13 @@ export default function ImageResizerPage() {
         </div>
       </div>
     </div>
+
+    <ReviewModal
+      isOpen={showReviewModal}
+      onClose={() => setShowReviewModal(false)}
+      onSubmit={handleReviewSubmit}
+      documentType={reviewDocType}
+    />
+    </>
   );
 }

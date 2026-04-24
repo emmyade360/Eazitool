@@ -1,123 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { headers } from 'next/headers';
-import { sanitizeHtml } from '@/lib/sanitize';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const rateLimitStore = new Map<string, number[]>();
-const RATE_LIMIT_MAX = 3;
-const RATE_LIMIT_WINDOW = 10 * 60 * 1000;
+const TEMPLATE_META: Record<string, { label: string }> = {
+  harvard: { label: 'Harvard Classic' },
+  stanford: { label: 'Stanford Modern' },
+  mckinsey: { label: 'McKinsey Executive' },
+  google: { label: 'Google Minimal' },
+  mit: { label: 'MIT Technical' },
+  forbes: { label: 'Forbes Bold' },
+};
 
-function cleanupOldEntries() {
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW;
+function buildPrompt(templateId: string, content: string): string {
+  const meta = TEMPLATE_META[templateId];
+  return `You are an expert HTML/CSS developer specializing in ATS-friendly CV templates.
 
-  for (const [ip, timestamps] of rateLimitStore.entries()) {
-    const recent = timestamps.filter((timestamp) => timestamp > cutoff);
-    if (recent.length === 0) {
-      rateLimitStore.delete(ip);
-    } else {
-      rateLimitStore.set(ip, recent);
-    }
-  }
+Generate a complete, professional CV in HTML with embedded CSS that matches the ${meta?.label || templateId} style.
+
+CRITICAL REQUIREMENTS:
+- Output ONLY valid HTML with embedded CSS in <style> tags
+- ATS-friendly: no tables for layout, no images, standard HTML structure
+- Use semantic HTML: <header>, <section>, <article>, <h1>-<h6>, <ul>, <li>
+- CSS must be embedded in <style> tags (no external files)
+- Use standard fonts: Arial, Helvetica, Times New Roman, or Georgia
+- Print-friendly: use @media print styles
+- Page size: A4 (210mm x 297mm) or standard US Letter
+- Font sizes: 10-12pt for body, 14-18pt for headings
+- Line height: 1.3-1.6 for readability
+
+TEMPLATE-SPECIFIC STYLING:
+- harvard: Classic serif font (Times New Roman, Georgia), traditional black and white, clear section headings in ALL CAPS, underlined section headers, left-aligned, single-column layout, generous margins (1 inch / 2.54cm), conservative spacing, bold company/job titles
+- stanford: Modern sans-serif (Arial, Helvetica), two-column layout: narrow left sidebar for contact/skills, teal or blue accent (#0D9488 or #2563EB), rounded corners on sections, clean, airy spacing, subtle shadows or borders, modern gradient header (optional)
+- mckinsey: Executive serif font (Georgia, Times), dark navy accent (#1E3A8A) with gold highlights (#F59E0B), strong horizontal rules between sections, right-aligned dates, bold metrics and numbers, ample white space, sophisticated, premium feel
+- google: Clean sans-serif (Arial, Roboto), Material Design inspired: cards with subtle shadows, blue accent (#4285F4), border-radius on containers (8px), minimalist, lots of white space, simple, clear hierarchy
+- mit: Technical monospace/sans-serif mix (Consolas, Arial), structured grid layout, dark gray (#374151) with bright accent (#10B981), code-like formatting for technical skills, clear section numbering (1. 2. 3.), precise, engineering-focused design
+- forbes: Bold sans-serif (Arial Black, Impact for headers), strong contrast: black text on white, red accents (#DC2626), large, bold name header, horizontal accent bars, executive summary box with colored background, professional yet distinctive
+
+CONTENT TO RENDER:
+---
+${content}
+---
+
+Output the complete HTML document with embedded CSS now:`;
 }
-
-cleanupOldEntries();
-setInterval(cleanupOldEntries, 60 * 1000);
-
-function checkRateLimit(ip: string) {
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW;
-  const timestamps = rateLimitStore.get(ip) ?? [];
-  const recent = timestamps.filter((timestamp) => timestamp > cutoff);
-  const remaining = Math.max(0, RATE_LIMIT_MAX - recent.length);
-  const reset = recent.length >= RATE_LIMIT_MAX ? Math.min(...recent) + RATE_LIMIT_WINDOW : 0;
-
-  if (remaining > 0) {
-    recent.push(now);
-    rateLimitStore.set(ip, recent);
-  }
-
-  return {
-    allowed: remaining > 0,
-    remaining,
-    reset,
-  };
-}
-
-export type ProfessionalTemplateId =
-  | 'harvard'
-  | 'stanford'
-  | 'mckinsey'
-  | 'google'
-  | 'mit'
-  | 'forbes';
 
 export async function POST(req: NextRequest) {
-  const reqHeaders = await headers();
-  const forwardedFor = reqHeaders.get('x-forwarded-for');
-  const ip = (forwardedFor ? forwardedFor.split(',')[0]?.trim() : null) ?? 'unknown';
-
-  const rateInfo = checkRateLimit(ip);
-  if (!rateInfo.allowed) {
-    const retryAfter = Math.ceil((rateInfo.reset - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded. Please try again later.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.max(1, retryAfter)),
-          'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(Math.ceil(rateInfo.reset / 1000)),
-        },
-      }
-    );
-  }
-
   try {
-    const payload = (await req.json()) as {
-      content: string;
-      templateId: ProfessionalTemplateId;
-    };
+    const { content, templateId } = await req.json();
 
-    if (!payload.content || !payload.templateId) {
-      return NextResponse.json(
-        { error: 'Missing content or templateId.' },
-        { status: 400 }
-      );
+    if (!content || !templateId) {
+      return NextResponse.json({ error: 'Missing content or templateId.' }, { status: 400 });
     }
-
-    const { buildTemplatePrompt } = await import('@/lib/cv-templates');
-    const prompt = buildTemplatePrompt(payload.templateId, payload.content);
 
     const result = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: buildPrompt(templateId, content) }],
       temperature: 0.3,
       max_tokens: 4000,
     });
 
     let htmlTemplate = result.choices[0]?.message?.content ?? '';
 
-    // Extract HTML if Groq wraps it in markdown code blocks
     const htmlMatch = htmlTemplate.match(/```(?:html)?\s*([\s\S]*?)```/);
-    if (htmlMatch) {
-      htmlTemplate = htmlMatch[1];
-    }
+    if (htmlMatch) htmlTemplate = htmlMatch[1];
 
-    // Sanitize the HTML for security
-    htmlTemplate = sanitizeHtml(htmlTemplate);
+    htmlTemplate = htmlTemplate.replace(/<script[\s\S]*?<\/script>/gi, '');
 
-    // Ensure it has proper HTML structure
     if (!htmlTemplate.includes('<html') && !htmlTemplate.includes('<!DOCTYPE')) {
       htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CV - ${payload.templateId}</title>
+  <title>CV - ${templateId}</title>
 </head>
 <body>
 ${htmlTemplate}
@@ -127,7 +83,6 @@ ${htmlTemplate}
 
     return NextResponse.json({ htmlTemplate });
   } catch (error) {
-    console.error('Template generation error:', error);
     const message = error instanceof Error ? error.message : 'Template generation failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }

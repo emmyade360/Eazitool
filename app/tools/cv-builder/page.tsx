@@ -13,6 +13,9 @@ import {
   type ProfessionalTemplateId,
   HtmlTemplatePreview,
 } from '@/components/cv-preview';
+import dynamic from 'next/dynamic';
+import { submitReview, type Review } from '@/lib/supabase';
+const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 
 type Experience = { company: string; role: string; duration: string; bullets: string };
 type Education = { institution: string; degree: string; year: string };
@@ -240,6 +243,13 @@ export default function CVBuilderPage() {
     html: string;
   } | null>(null);
   const [profExportFormat, setProfExportFormat] = useState<'pdf' | 'docx'>('pdf');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewData, setReviewData] = useState({
+    rating: 0,
+    comment: '',
+    documentType: '',
+    pendingDownload: null as null | { type: string; data: any },
+  });
 
   function setPersonalField(key: keyof typeof personal, value: string) {
     setPersonal((current) => ({ ...current, [key]: value }));
@@ -367,6 +377,10 @@ export default function CVBuilderPage() {
       anchor.href = url;
       anchor.click();
       URL.revokeObjectURL(url);
+
+      // Trigger review modal
+      setReviewData(prev => ({ ...prev, documentType: `cv-${exportFormat}` }));
+      setShowReviewModal(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -434,7 +448,7 @@ export default function CVBuilderPage() {
       const results = await Promise.all(
         professionalIds.map(async (templateId) => {
           try {
-            const response = await fetch('/api/cv/generate-template', {
+            const res = await fetch('/api/cv/generate-template', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -443,17 +457,16 @@ export default function CVBuilderPage() {
               }),
             });
 
-            const data = (await response.json()) as { htmlTemplate?: string; error?: string };
-
-            if (data.error) {
-              console.error(`Failed to generate ${templateId}:`, data.error);
+            if (!res.ok) {
+              console.error(`Failed to generate ${templateId}`);
               return null;
             }
 
+            const data = await res.json();
             return {
               id: templateId,
               label: templateId.charAt(0).toUpperCase() + templateId.slice(1),
-              html: data.htmlTemplate ?? '',
+              html: data?.htmlTemplate ?? '',
             };
           } catch (err) {
             console.error(`Error generating ${templateId}:`, err);
@@ -470,6 +483,21 @@ export default function CVBuilderPage() {
       setError(err instanceof Error ? err.message : 'Failed to generate professional templates');
     } finally {
       setGeneratingProfessional(false);
+    }
+  }
+
+  async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
+    try {
+      await submitReview({
+        document_type: review.documentType,
+        rating: review.rating,
+        comment: review.comment || undefined,
+        user_email: personal.email || undefined,
+      });
+      setShowReviewModal(false);
+      setReviewData({ rating: 0, comment: '', documentType: '', pendingDownload: null });
+    } catch (err) {
+      console.error('Failed to submit review:', err);
     }
   }
 
@@ -1097,6 +1125,8 @@ export default function CVBuilderPage() {
                               setTimeout(() => {
                                 printWindow.print();
                                 setExporting(false);
+                                setReviewData(prev => ({ ...prev, documentType: `cv-professional-pdf` }));
+                                setShowReviewModal(true);
                               }, 500);
                             }
                           } else {
@@ -1110,9 +1140,9 @@ export default function CVBuilderPage() {
                                 fileBaseName: `${personal.name || 'CV'}_${selectedProfessionalTemplate.id}`,
                               }),
                             });
-                            
+
                             if (!response.ok) throw new Error('Export failed');
-                            
+
                             const blob = await response.blob();
                             const url = URL.createObjectURL(blob);
                             const anchor = document.createElement('a');
@@ -1120,6 +1150,8 @@ export default function CVBuilderPage() {
                             anchor.href = url;
                             anchor.click();
                             URL.revokeObjectURL(url);
+                            setReviewData(prev => ({ ...prev, documentType: `cv-professional-docx` }));
+                            setShowReviewModal(true);
                           }
                         } catch (err) {
                           setError(err instanceof Error ? err.message : 'Export failed');
@@ -1160,6 +1192,13 @@ export default function CVBuilderPage() {
 
         {error && step !== 1 && <div className="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
       </div>
+
+      <ReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        onSubmit={handleReviewSubmit}
+        documentType={reviewData.documentType}
+      />
     </div>
   );
 }

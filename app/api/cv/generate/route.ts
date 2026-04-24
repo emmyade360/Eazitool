@@ -1,53 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { headers } from 'next/headers';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-const rateLimitStore = new Map<string, number[]>();
-const RATE_LIMIT_MAX = 1;
-const RATE_LIMIT_WINDOW = 5 * 60 * 1000;
-const RATE_LIMIT_CLEANUP_INTERVAL = 60 * 1000;
-
-function cleanupOldEntries() {
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW;
-
-  for (const [ip, timestamps] of rateLimitStore.entries()) {
-    const recent = timestamps.filter((timestamp) => timestamp > cutoff);
-    if (recent.length === 0) {
-      rateLimitStore.delete(ip);
-    } else {
-      rateLimitStore.set(ip, recent);
-    }
-  }
-}
-
-cleanupOldEntries();
-setInterval(cleanupOldEntries, RATE_LIMIT_CLEANUP_INTERVAL);
-
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number; reset: number } {
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW;
-  const timestamps = rateLimitStore.get(ip) ?? [];
-  const recent = timestamps.filter((timestamp) => timestamp > cutoff);
-  const remaining = Math.max(0, RATE_LIMIT_MAX - recent.length);
-  const reset = recent.length >= RATE_LIMIT_MAX ? Math.min(...recent) + RATE_LIMIT_WINDOW : 0;
-
-  if (remaining > 0) {
-    recent.push(now);
-    rateLimitStore.set(ip, recent);
-  }
-
-  return {
-    allowed: remaining > 0,
-    remaining,
-    reset,
-  };
-}
-
-type Experience = { company: string; role: string; duration: string; bullets: string };
-type Education = { institution: string; degree: string; year: string };
 
 interface CVPayload {
   name: string;
@@ -58,8 +12,8 @@ interface CVPayload {
   website?: string;
   sections: string[];
   summary?: string;
-  experience?: Experience[];
-  education?: Education[];
+  experience?: Array<{ company: string; role: string; duration: string; bullets: string }>;
+  education?: Array<{ institution: string; degree: string; year: string }>;
   skills?: string;
   certifications?: string;
   projects?: string;
@@ -113,14 +67,14 @@ function buildPrompt(payload: CVPayload): string {
     summary: payload.summary?.trim() ? `PROFESSIONAL SUMMARY:\n${payload.summary.trim()}` : '',
     experience: payload.experience?.length
       ? `WORK EXPERIENCE:\n${payload.experience
-          .filter((item) => item.company.trim() || item.role.trim() || item.duration.trim() || item.bullets.trim())
-          .map((item) => `${item.role} at ${item.company} (${item.duration})\n${item.bullets}`)
+          .filter((e) => e.company.trim() || e.role.trim() || e.duration.trim() || e.bullets.trim())
+          .map((e) => `${e.role} at ${e.company} (${e.duration})\n${e.bullets}`)
           .join('\n\n')}`
       : '',
     education: payload.education?.length
       ? `EDUCATION:\n${payload.education
-          .filter((item) => item.institution.trim() || item.degree.trim() || item.year.trim())
-          .map((item) => `${item.degree} - ${item.institution} (${item.year})`)
+          .filter((e) => e.institution.trim() || e.degree.trim() || e.year.trim())
+          .map((e) => `${e.degree} - ${e.institution} (${e.year})`)
           .join('\n')}`
       : '',
     skills: payload.skills?.trim() ? `SKILLS:\n${payload.skills.trim()}` : '',
@@ -165,27 +119,6 @@ Write the complete CV now:`;
 }
 
 export async function POST(req: NextRequest) {
-  const reqHeaders = await headers();
-  const forwardedFor = reqHeaders.get('x-forwarded-for');
-  const ip = (forwardedFor ? forwardedFor.split(',')[0]?.trim() : null) ?? 'unknown';
-
-  const rateInfo = checkRateLimit(ip);
-  if (!rateInfo.allowed) {
-    const retryAfter = Math.ceil((rateInfo.reset - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded. Please try again later.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.max(1, retryAfter)),
-          'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(Math.ceil(rateInfo.reset / 1000)),
-        },
-      }
-    );
-  }
-
   try {
     const payload = (await req.json()) as CVPayload;
     const styles: Array<'classic' | 'impact' | 'story'> = ['classic', 'impact', 'story'];
@@ -230,7 +163,7 @@ export async function POST(req: NextRequest) {
       },
     ].map((meta) => ({
       ...meta,
-      content: results.find((result) => result.style === meta.style)?.content ?? '',
+      content: results.find((r) => r.style === meta.style)?.content ?? '',
     }));
 
     return NextResponse.json({ variants });

@@ -1,50 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useLanguage } from './language-context';
 
-function LanguageSelector({
-  mobile = false,
-  closeMobileMenu,
-}: {
-  mobile?: boolean;
-  closeMobileMenu?: () => void;
-}) {
+function LanguageSelector({ onClose }: { onClose?: () => void }) {
   const { language, setLanguage, languages, t } = useLanguage();
-
-  if (mobile) {
-    return (
-      <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-blue-700">
-          {t('nav.language')}
-        </label>
-        <select
-          value={language}
-          onChange={(event) => {
-            setLanguage(event.target.value as typeof language);
-            closeMobileMenu?.();
-          }}
-          className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          aria-label={t('nav.language')}
-        >
-          {languages.map((item) => (
-            <option key={item.code} value={item.code}>
-              {item.nativeLabel}
-            </option>
-          ))}
-        </select>
-        <p className="mt-2 text-xs text-blue-600">{t('nav.languageHelper')}</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm font-medium text-blue-700">{t('nav.language')}</span>
+      <label className="sr-only">{t('nav.language')}</label>
       <select
         value={language}
-        onChange={(event) => setLanguage(event.target.value as typeof language)}
+        onChange={(e) => {
+          setLanguage(e.target.value as typeof language);
+          onClose?.();
+        }}
         className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
         aria-label={t('nav.language')}
       >
@@ -59,82 +31,111 @@ function LanguageSelector({
 }
 
 export default function Navbar() {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileTools, setMobileTools] = useState(false);
 
-  const closeMobileMenu = () => {
+  // Close drawer on navigation
+  useEffect(() => {
     setMobileOpen(false);
-    setMobileTools(false);
-  };
+  }, [pathname]);
+
+  // Lock body scroll while mobile menu is open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
+
+  const navLinks = [
+    { href: '/', label: t('nav.home') },
+    { href: '/tools', label: t('nav.tools') },
+  ];
 
   return (
-    <nav className="fixed left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-blue-200 bg-white px-6 shadow-sm">
-      <Link href="/" className="flex items-center gap-3">
-        <div className="relative h-10 w-10">
-          <div className="absolute inset-0 rounded-lg bg-blue-600" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-lg font-bold text-white">E</span>
+    <>
+      <nav className="fixed left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-blue-200 bg-white px-4 shadow-sm sm:px-6">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
+            <span className="text-base font-bold text-white">E</span>
           </div>
-        </div>
-        <h1 className="text-xl font-bold tracking-tight text-blue-600">Eazitool</h1>
-      </Link>
-
-      <div className="hidden items-center gap-6 md:flex">
-        <Link href="/" className="flex items-center gap-2 font-medium text-blue-800 transition-colors hover:text-blue-600">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-          </svg>
-          {t('nav.home')}
+          <span className="text-lg font-bold tracking-tight text-blue-600">Eazitool</span>
         </Link>
 
-        <Link href="/tools" className="font-medium text-blue-800 transition-colors hover:text-blue-600">
-          {t('nav.tools')}
-        </Link>
-
-        <Link href="#services" className="font-medium text-blue-800 transition-colors hover:text-blue-600">
-          {t('nav.services')}
-        </Link>
-        <Link href="#contact" className="font-medium text-blue-800 transition-colors hover:text-blue-600">
-          {t('nav.contact')}
-        </Link>
-        <LanguageSelector />
-      </div>
-
-      <button className="p-2 md:hidden" onClick={() => setMobileOpen((value) => !value)}>
-        <svg className="h-6 w-6 text-blue-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
-        </svg>
-      </button>
-
-      {mobileOpen && (
-        <div className="absolute left-0 right-0 top-16 border-b border-blue-100 bg-white shadow-lg md:hidden">
-          <div className="space-y-2 p-4">
+        {/* Desktop links */}
+        <div className="hidden items-center gap-6 md:flex">
+          {navLinks.map((link) => (
             <Link
-              href="/"
-              className="flex items-center gap-3 rounded-lg px-4 py-2.5 font-medium text-blue-800 hover:bg-blue-50"
-              onClick={closeMobileMenu}
+              key={link.href}
+              href={link.href}
+              className={`font-medium transition-colors hover:text-blue-600 ${
+                pathname === link.href ? 'text-blue-600' : 'text-blue-800'
+              }`}
             >
-              <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              {t('nav.home')}
+              {link.label}
             </Link>
-
-            <Link href="/tools" className="block rounded-lg px-4 py-2.5 font-medium text-blue-800 hover:bg-blue-50" onClick={closeMobileMenu}>
-              {t('nav.tools')}
-            </Link>
-
-            <Link href="#services" className="block rounded-lg px-4 py-2.5 text-blue-800 hover:bg-blue-50" onClick={closeMobileMenu}>
-              {t('nav.services')}
-            </Link>
-            <Link href="#contact" className="block rounded-lg px-4 py-2.5 text-blue-800 hover:bg-blue-50" onClick={closeMobileMenu}>
-              {t('nav.contact')}
-            </Link>
-            <LanguageSelector mobile closeMobileMenu={closeMobileMenu} />
-          </div>
+          ))}
+          <LanguageSelector />
         </div>
+
+        {/* Mobile hamburger — hidden on md+ (MobileNav handles navigation) */}
+        <button
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-blue-800 transition-colors hover:bg-blue-50 md:hidden"
+          onClick={() => setMobileOpen((v) => !v)}
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
+        >
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d={mobileOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'}
+            />
+          </svg>
+        </button>
+      </nav>
+
+      {/* Mobile slide-down menu */}
+      {mobileOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/20 md:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden
+          />
+
+          {/* Menu panel */}
+          <div className="animate-slide-up fixed left-0 right-0 top-16 z-40 border-b border-blue-100 bg-white shadow-lg md:hidden">
+            <div className="space-y-1 p-4">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex items-center rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${
+                    pathname === link.href
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-blue-800 hover:bg-blue-50'
+                  }`}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+
+              <div className="border-t border-slate-100 pt-3">
+                <p className="mb-2 px-4 text-xs font-bold uppercase tracking-widest text-slate-400">
+                  Language
+                </p>
+                <div className="px-4">
+                  <LanguageSelector onClose={() => setMobileOpen(false)} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
-    </nav>
+    </>
   );
 }

@@ -1,11 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
 import { LanguageProvider } from "@/components/language-context";
 import { absoluteUrl, siteConfig } from "./seo";
 import { getDirection, resolveLanguageCode } from "@/lib/i18n";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#2563eb",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -78,7 +85,7 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang={initialLanguage} dir={getDirection(initialLanguage)}>
+    <html lang={initialLanguage} dir={getDirection(initialLanguage)} data-scroll-behavior="smooth">
       <body className="min-h-screen bg-white">
         <LanguageProvider initialLanguage={initialLanguage}>
           <script
@@ -90,12 +97,11 @@ export default async function RootLayout({
             dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
           />
           <Navbar />
-          <div className="flex">
-            <Sidebar />
-            <main className="flex-1 pt-16 md:ml-64">
-              {children}
-            </main>
-          </div>
+          {/* pt-16 clears fixed navbar; pb-16 md:pb-0 clears mobile bottom nav */}
+          <main className="pt-16 pb-16 md:pb-0">
+            {children}
+          </main>
+          <MobileNav />
         </LanguageProvider>
       </body>
     </html>

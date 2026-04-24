@@ -1,0 +1,29 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export type Review = {
+  id?: string;
+  document_type: string;
+  rating: number;
+  comment?: string;
+  user_email?: string;
+  created_at?: string;
+};
+
+/** Submits a review via the server-side API route (avoids client-side auth issues). */
+export async function submitReview(review: Omit<Review, 'id' | 'created_at'>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(review),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

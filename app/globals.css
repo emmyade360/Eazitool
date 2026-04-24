@@ -19,40 +19,85 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ─── Performance baseline ─────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: var(--brand-white);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
+/* Remove tap flash on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth touch scrolling on iOS */
+main,
+aside,
+[data-scroll] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* GPU-accelerate fixed positioned layers */
+nav,
+aside {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Ensure interactive elements are touch-friendly (min 44×44px) */
+button,
+a,
+select,
+input[type="range"],
+input[type="file"] {
+  touch-action: manipulation;
+}
+
+/* ─── Animations ────────────────────────────────────────── */
 @keyframes pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.4;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
+  0%   { transform: scale(1);   opacity: 0.4; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
-
 .animate-pulse-ring {
   animation: pulse-ring 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out both;
 }
 
-::-webkit-scrollbar-track {
-  background: #eff6ff;
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out both;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #93c5fd;
-  border-radius: 3px;
+/* ─── Scrollbar (desktop only) ──────────────────────────── */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar       { width: 6px; }
+  ::-webkit-scrollbar-track { background: #eff6ff; }
+  ::-webkit-scrollbar-thumb { background: #93c5fd; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #60a5fa; }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #60a5fa;
+/* ─── Range input ───────────────────────────────────────── */
+input[type="range"] {
+  cursor: pointer;
 }
