@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
+export const runtime = 'nodejs';
+
 const MIME: Record<string, string> = {
   jpeg: 'image/jpeg',
   jpg:  'image/jpeg',
@@ -25,12 +27,47 @@ const EXT: Record<string, string> = {
   heif: 'heif',
 };
 
+function clampQuality(value: number): number {
+  if (Number.isNaN(value)) return 85;
+  return Math.max(1, Math.min(100, value));
+}
+
+function isHeicInput(file: File): boolean {
+  return file.type === 'image/heic' || /\.(heic|heif)$/i.test(file.name);
+}
+
+async function decodeHeicWithFallback(buffer: Buffer): Promise<Buffer> {
+  const convert = (await import('heic-convert')).default;
+
+  return Buffer.from(
+    await convert({
+      buffer,
+      format: 'PNG',
+    })
+  );
+}
+
+async function buildPipeline(buffer: Buffer, file: File) {
+  if (!isHeicInput(file)) {
+    return sharp(buffer, { density: 150 });
+  }
+
+  try {
+    const nativePipeline = sharp(buffer, { density: 150 });
+    await nativePipeline.metadata();
+    return nativePipeline;
+  } catch {}
+
+  const decoded = await decodeHeicWithFallback(buffer);
+  return sharp(decoded);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form    = await req.formData();
     const file    = form.get('file')    as File | null;
     const to      = (form.get('to')     as string | null)?.toLowerCase();
-    const quality = parseInt((form.get('quality') as string | null) ?? '85', 10);
+    const quality = clampQuality(parseInt((form.get('quality') as string | null) ?? '85', 10));
 
     if (!file || !to) {
       return NextResponse.json({ error: 'Missing file or target format' }, { status: 400 });
@@ -50,7 +87,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer   = Buffer.from(await file.arrayBuffer());
-    let pipeline   = sharp(buffer, { density: 150 }); // density matters for SVG rasterisation
+    let pipeline = await buildPipeline(buffer, file);
 
     if (to === 'jpeg' || to === 'jpg') {
       pipeline = pipeline.jpeg({ quality, mozjpeg: true });

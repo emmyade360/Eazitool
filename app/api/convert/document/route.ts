@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+
 type RenderedPage = { data: Buffer; width: number; height: number };
 
 type InlineStyle = {
@@ -55,11 +57,35 @@ async function pdfPagesToImages(buffer: Buffer): Promise<RenderedPage[]> {
 }
 
 async function parsePDFText(buffer: Buffer): Promise<string> {
-  const { PDFParse } = await import('pdf-parse');
-  const parser = new PDFParse({ data: buffer });
-  const result = await parser.getText();
-  await parser.destroy();
-  return (result?.text ?? '').trim();
+  const { default: PDFParser } = await import('pdf2json');
+
+  return await new Promise<string>((resolve, reject) => {
+    const parser = new PDFParser(null, true);
+
+    const cleanup = () => {
+      parser.removeAllListeners();
+      parser.destroy();
+    };
+
+    parser.on('pdfParser_dataError', (error) => {
+      cleanup();
+      const parserError = 'parserError' in error ? error.parserError : error;
+      reject(parserError);
+    });
+
+    parser.on('pdfParser_dataReady', () => {
+      const rawText = parser
+        .getRawTextContent()
+        .replace(/\r\n----------------Page \(\d+\) Break----------------\r\n/g, '\n\n')
+        .replace(/\r\n/g, '\n')
+        .trim();
+
+      cleanup();
+      resolve(rawText);
+    });
+
+    parser.parseBuffer(buffer);
+  });
 }
 
 function decodeHtmlEntities(text: string): string {
