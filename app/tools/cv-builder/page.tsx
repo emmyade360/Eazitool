@@ -140,23 +140,32 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
   );
 }
 
+function toFieldId(label: string) {
+  return 'cv-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 function InputField({
   label,
   value,
   onChange,
   placeholder,
   type = 'text',
+  id,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   type?: string;
+  id?: string;
 }) {
+  const fieldId = id ?? toFieldId(label);
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-semibold text-slate-500">{label}</label>
+      <label htmlFor={fieldId} className="mb-1.5 block text-xs font-semibold text-slate-500">{label}</label>
       <input
+        id={fieldId}
+        name={fieldId}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -173,17 +182,22 @@ function TextareaField({
   onChange,
   placeholder,
   rows = 3,
+  id,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   rows?: number;
+  id?: string;
 }) {
+  const fieldId = id ?? toFieldId(label);
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-semibold text-slate-500">{label}</label>
+      <label htmlFor={fieldId} className="mb-1.5 block text-xs font-semibold text-slate-500">{label}</label>
       <textarea
+        id={fieldId}
+        name={fieldId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={rows}
@@ -974,10 +988,22 @@ export default function CVBuilderPage() {
                   </div>
                 </div>
 
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className={`overflow-hidden rounded-2xl border-2 shadow-sm ${color.border}`}>
+                  <div className={`flex items-center gap-2 border-b px-6 py-3 ${color.bg} ${color.border}`}>
+                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+                    <span className={`ml-2 text-xs font-semibold ${color.text}`}>{personal.name} - {templateMeta.label} {copy.previewSuffix}</span>
+                  </div>
+                  <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
+                    <CVPreviewCard variant={selected} templateId={selectedTemplateId} />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">Choose your download format</p>
-                    <p className="text-xs text-slate-500">Export the selected Groq-written CV as a professionally styled PDF or DOCX.</p>
+                    <p className="text-xs text-slate-500">Export the selected CV as a professionally styled PDF or DOCX.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -1007,18 +1033,6 @@ export default function CVBuilderPage() {
                       </svg>
                       {exporting ? `Exporting ${exportFormat.toUpperCase()}...` : `Download ${exportFormat.toUpperCase()}`}
                     </button>
-                  </div>
-                </div>
-
-                <div className={`overflow-hidden rounded-2xl border-2 shadow-sm ${color.border}`}>
-                  <div className={`flex items-center gap-2 border-b px-6 py-3 ${color.bg} ${color.border}`}>
-                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                    <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                    <span className={`ml-2 text-xs font-semibold ${color.text}`}>{personal.name} - {templateMeta.label} {copy.previewSuffix}</span>
-                  </div>
-                  <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
-                    <CVPreviewCard variant={selected} templateId={selectedTemplateId} />
                   </div>
                 </div>
 
@@ -1080,12 +1094,26 @@ export default function CVBuilderPage() {
                   </div>
                 </div>
 
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="overflow-hidden rounded-2xl border-2 border-violet-200 shadow-sm">
+                  <div className={`flex items-center gap-2 border-b border-violet-200 bg-violet-50 px-6 py-3`}>
+                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+                    <span className="ml-2 text-xs font-semibold text-violet-700">
+                      {personal.name} - {profMeta?.label} Preview
+                    </span>
+                  </div>
+                  <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
+                    <HtmlTemplatePreview htmlTemplate={selectedProfessionalTemplate.html} />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">Choose your download format</p>
                     <p className="text-xs text-slate-500">
-                      {profExportFormat === 'pdf' 
-                        ? 'Print the professional template as PDF.' 
+                      {profExportFormat === 'pdf'
+                        ? 'Print the professional template as PDF.'
                         : 'Export the CV content as DOCX document.'}
                     </p>
                   </div>
@@ -1163,20 +1191,6 @@ export default function CVBuilderPage() {
                       </svg>
                       {exporting ? 'Exporting...' : `Download ${profExportFormat.toUpperCase()}`}
                     </button>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-2xl border-2 border-violet-200 shadow-sm">
-                  <div className={`flex items-center gap-2 border-b border-violet-200 bg-violet-50 px-6 py-3`}>
-                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                    <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                    <span className="ml-2 text-xs font-semibold text-violet-700">
-                      {personal.name} - {profMeta?.label} Preview
-                    </span>
-                  </div>
-                  <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
-                    <HtmlTemplatePreview htmlTemplate={selectedProfessionalTemplate.html} />
                   </div>
                 </div>
               </div>
