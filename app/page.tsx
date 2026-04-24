@@ -159,46 +159,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      <section className="bg-slate-900 px-6 py-20">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold text-white md:text-4xl">{copy.featuredTitle}</h2>
-            <p className="mt-4 text-lg text-slate-400">{copy.featuredBody}</p>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            {toolCategories.map((category) => (
-              <div
-                key={category.category}
-                className="rounded-2xl border border-slate-700 bg-slate-800 p-6 transition-all hover:border-blue-500/50"
-              >
-                <h3 className="text-lg font-semibold text-white">{category.category}</h3>
-                <div className="mt-4 space-y-3">
-                  {category.items.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="group block rounded-xl bg-slate-700/50 p-4 transition-all hover:bg-slate-700"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="font-medium text-white group-hover:text-blue-400">{item.label}</p>
-                          <p className="mt-1 text-sm text-slate-400">{item.description}</p>
-                        </div>
-                        <svg className="h-5 w-5 flex-shrink-0 text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
+      
       <section className="bg-gradient-to-br from-blue-600 to-cyan-600 px-6 py-20">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="text-3xl font-bold text-white md:text-4xl">{copy.ctaTitle}</h2>

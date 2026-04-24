@@ -1,15 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from './language-context';
-import { getToolCategories } from './tools-data';
-
-const TOOL_ICONS = {
-  cv: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  doc: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z',
-  image: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z',
-} as const;
 
 function LanguageSelector({
   mobile = false,
@@ -68,31 +61,7 @@ function LanguageSelector({
 export default function Navbar() {
   const { language, t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileTools, setMobileTools] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const toolCategories = useMemo(() => getToolCategories(language), [language]);
-  const tools = useMemo(
-    () =>
-      toolCategories.flatMap((category) =>
-        category.items.map((tool) => ({
-          ...tool,
-          icon: tool.icon ?? TOOL_ICONS.image,
-          category: category.category,
-        }))
-      ),
-    [toolCategories]
-  );
-
-  const openTools = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    setToolsOpen(true);
-  };
-
-  const closeTools = () => {
-    closeTimer.current = setTimeout(() => setToolsOpen(false), 150);
-  };
 
   const closeMobileMenu = () => {
     setMobileOpen(false);
@@ -119,44 +88,9 @@ export default function Navbar() {
           {t('nav.home')}
         </Link>
 
-        <div className="relative" onMouseEnter={openTools} onMouseLeave={closeTools}>
-          <button
-            onClick={() => setToolsOpen((value) => !value)}
-            className="flex items-center gap-1.5 font-medium text-blue-800 transition-colors hover:text-blue-600"
-          >
-            {t('nav.tools')}
-            <svg className={`h-4 w-4 transition-transform duration-200 ${toolsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {toolsOpen && (
-            <div
-              onMouseEnter={openTools}
-              onMouseLeave={closeTools}
-              className="absolute left-1/2 top-full mt-2 w-72 -translate-x-1/2 rounded-xl border border-blue-100 bg-white p-2 shadow-lg"
-            >
-              {tools.map((tool, index) => (
-                <Link
-                  key={tool.href}
-                  href={tool.href}
-                  onClick={() => setToolsOpen(false)}
-                  className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-blue-50 ${index !== tools.length - 1 ? 'mb-1' : ''}`}
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                    <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tool.icon} />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-medium text-blue-800">{tool.label}</p>
-                    <p className="text-xs text-blue-500">{tool.description}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        <Link href="/tools" className="font-medium text-blue-800 transition-colors hover:text-blue-600">
+          {t('nav.tools')}
+        </Link>
 
         <Link href="#services" className="font-medium text-blue-800 transition-colors hover:text-blue-600">
           {t('nav.services')}
@@ -187,52 +121,9 @@ export default function Navbar() {
               {t('nav.home')}
             </Link>
 
-            <button
-              onClick={() => setMobileTools((value) => !value)}
-              className="flex w-full items-center justify-between rounded-lg px-4 py-2.5 font-medium text-blue-800 hover:bg-blue-50"
-            >
+            <Link href="/tools" className="block rounded-lg px-4 py-2.5 font-medium text-blue-800 hover:bg-blue-50" onClick={closeMobileMenu}>
               {t('nav.tools')}
-              <svg className={`h-4 w-4 ${mobileTools ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {mobileTools && (
-              <div className="ml-4 space-y-3 py-2">
-                {toolCategories.map((category) => (
-                  <div key={category.category}>
-                    <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                      {category.category}
-                    </p>
-                    <div className="space-y-1">
-                      {category.items.map((tool) => (
-                        <Link
-                          key={tool.href}
-                          href={tool.href}
-                          onClick={closeMobileMenu}
-                          className="flex items-center gap-3 rounded-lg px-4 py-2.5 hover:bg-blue-50"
-                        >
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-                            <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d={tool.icon ?? TOOL_ICONS.image}
-                              />
-                            </svg>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-blue-800">{tool.label}</p>
-                            <p className="truncate text-xs text-blue-500">{tool.description}</p>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            </Link>
 
             <Link href="#services" className="block rounded-lg px-4 py-2.5 text-blue-800 hover:bg-blue-50" onClick={closeMobileMenu}>
               {t('nav.services')}
