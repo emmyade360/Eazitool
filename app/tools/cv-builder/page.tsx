@@ -292,23 +292,24 @@ export default function CVBuilderPage() {
     setProfessionalTemplates([]);
 
     try {
+      const has = (id: SectionId) => enabledSections.includes(id);
       const response = await fetch('/api/cv/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...personal,
           sections: enabledSections,
-          summary,
-          experience,
-          education,
-          skills,
-          certifications,
-          projects,
-          languages,
-          volunteer,
-          awards,
-          publications,
-          references,
+          summary: has('summary') ? summary : undefined,
+          experience: has('experience') ? experience : undefined,
+          education: has('education') ? education : undefined,
+          skills: has('skills') ? skills : undefined,
+          certifications: has('certifications') ? certifications : undefined,
+          projects: has('projects') ? projects : undefined,
+          languages: has('languages') ? languages : undefined,
+          volunteer: has('volunteer') ? volunteer : undefined,
+          awards: has('awards') ? awards : undefined,
+          publications: has('publications') ? publications : undefined,
+          references: has('references') ? references : undefined,
           style: 'classic',
         }),
       });
@@ -762,59 +763,22 @@ export default function CVBuilderPage() {
 
         {step === 2 && (
           <div>
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            {/* Header row */}
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">{copy.chooseDesignTitle}</h2>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  {copy.chooseDesignBody}
-                </p>
+                <p className="mt-0.5 text-sm text-slate-500">{copy.chooseDesignBody}</p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                  {(['standard', 'professional'] as const).map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setTemplateType(type)}
-                      className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                        templateType === type
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      {type === 'standard' ? 'Standard' : 'Professional'}
-                    </button>
-                  ))}
-                </div>
-                {templateType === 'professional' && professionalTemplates.length === 0 && (
+              <div className="flex items-center gap-2">
+                {templateType === 'standard' && (
                   <button
                     type="button"
-                    onClick={generateProfessionalTemplates}
-                    disabled={generatingProfessional || !variants.length}
-                    className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-all hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={reshuffleTemplates}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                   >
-                    {generatingProfessional ? (
-                      <>
-                        <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        Generate Professional
-                      </>
-                    )}
+                    {copy.reshuffleDesigns}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={reshuffleTemplates}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  {copy.reshuffleDesigns}
-                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -829,6 +793,36 @@ export default function CVBuilderPage() {
                   {copy.editDetails}
                 </button>
               </div>
+            </div>
+
+            {/* Prominent Standard / Professional toggle */}
+            <div className="mb-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
+              {(['standard', 'professional'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    setTemplateType(type);
+                    if (type === 'professional' && professionalTemplates.length === 0 && !generatingProfessional) {
+                      generateProfessionalTemplates();
+                    }
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+                    templateType === type
+                      ? type === 'professional'
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {type === 'professional' && (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                  )}
+                  {type === 'standard' ? 'Standard' : 'Professional (Harvard, Google…)'}
+                </button>
+              ))}
             </div>
 
             {templateType === 'standard' ? (
@@ -925,9 +919,9 @@ export default function CVBuilderPage() {
                   </div>
                 ) : (
                   <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center">
-                    <p className="text-sm text-slate-400">
-                      Click "Generate Professional" to create industry-standard CV templates powered by Groq AI.
-                    </p>
+                    <div className="mx-auto mb-3 h-10 w-10 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
+                    <p className="text-sm text-slate-500 font-medium">Preparing professional templates…</p>
+                    <p className="mt-1 text-xs text-slate-400">This may take a moment</p>
                   </div>
                 )}
               </div>
