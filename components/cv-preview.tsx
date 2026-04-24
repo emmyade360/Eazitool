@@ -15,6 +15,14 @@ import { sanitizeHtml } from '@/lib/sanitize';
 export { CV_TEMPLATE_IDS, CV_TEMPLATE_META, type CVTemplateId, type CVVariant } from '@/lib/cv-document';
 export { PROFESSIONAL_TEMPLATE_META, type ProfessionalTemplateId } from '@/lib/cv-templates';
 
+function hasContent(section: ResumeSection): boolean {
+  return (
+    section.paragraphs.length > 0 ||
+    section.bullets.length > 0 ||
+    section.entries.some((e) => e.heading.trim() || e.bullets.length > 0)
+  );
+}
+
 function ResumeSectionBlock({
   section,
   compact = false,
@@ -28,6 +36,8 @@ function ResumeSectionBlock({
   titleClass: string;
   dividerClass: string;
 }) {
+  const validEntries = section.entries.filter((e) => e.heading.trim() || e.bullets.length > 0);
+
   return (
     <section className={`border-t pt-4 ${dividerClass}`}>
       <h4 className={`text-[10px] font-bold uppercase tracking-[0.32em] ${titleClass}`}>
@@ -50,16 +60,18 @@ function ResumeSectionBlock({
           </ul>
         )}
 
-        {section.entries.map((entry, index) => (
+        {validEntries.map((entry, index) => (
           <article key={`entry-${index}-${entry.heading}`} className="space-y-1.5">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-              <h5 className={`text-sm font-semibold ${accentClass}`}>{entry.heading}</h5>
-              {entry.meta && (
-                <p className={`${compact ? 'text-[10px]' : 'text-xs'} text-slate-500`}>
-                  {entry.meta}
-                </p>
-              )}
-            </div>
+            {entry.heading && (
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+                <h5 className={`text-sm font-semibold ${accentClass}`}>{entry.heading}</h5>
+                {entry.meta && (
+                  <p className={`${compact ? 'text-[10px]' : 'text-xs'} text-slate-500`}>
+                    {entry.meta}
+                  </p>
+                )}
+              </div>
+            )}
             {entry.bullets.length > 0 && (
               <ul className="space-y-1.5 pl-4">
                 {entry.bullets.map((bullet, bulletIndex) => (
@@ -95,6 +107,7 @@ function ContactRow({
 }
 
 function renderExecutive(resume: ResumeDocument, compact: boolean) {
+  const visibleSections = resume.sections.filter(hasContent).slice(0, compact ? 3 : undefined);
   return (
     <div className="h-full rounded-[1.75rem] border border-slate-200 bg-white p-6 text-slate-900 shadow-sm">
       <div className="border-b border-slate-200 pb-5">
@@ -103,7 +116,7 @@ function renderExecutive(resume: ResumeDocument, compact: boolean) {
         <ContactRow contacts={resume.header.contacts} className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-slate-500" />
       </div>
       <div className="mt-5 space-y-4">
-        {resume.sections.slice(0, compact ? 3 : undefined).map((section) => (
+        {visibleSections.map((section) => (
           <ResumeSectionBlock
             key={section.title}
             section={section}
@@ -119,59 +132,115 @@ function renderExecutive(resume: ResumeDocument, compact: boolean) {
 }
 
 function renderSidebar(resume: ResumeDocument, compact: boolean) {
-  const sidebarSections = resume.sections.filter((section) =>
-    ['Skills', 'Certifications', 'Languages'].includes(section.title)
-  );
-  const mainSections = resume.sections.filter((section) =>
-    !['Skills', 'Certifications', 'Languages'].includes(section.title)
-  );
+  const visibleSections = resume.sections
+    .filter(hasContent)
+    .slice(0, compact ? 4 : undefined);
 
   return (
-    <div className="h-full rounded-[1.75rem] border border-blue-100 bg-white shadow-sm">
-      <div className="grid h-full lg:grid-cols-[0.72fr_1.28fr]">
-        <aside className="rounded-l-[1.75rem] bg-blue-700 p-5 text-white">
-          {resume.header.name && <h3 className="text-xl font-semibold tracking-tight">{resume.header.name}</h3>}
-          {resume.header.tagline && <p className="mt-3 text-sm leading-relaxed text-blue-100">{resume.header.tagline}</p>}
-          {resume.header.contacts.length > 0 && (
-            <div className="mt-5 space-y-2 text-[11px] leading-relaxed text-blue-100">
+    <div className="h-full overflow-hidden rounded-[1.75rem] border border-blue-100 bg-white shadow-sm">
+      {/* Header — full-width name block with left blue rail */}
+      <div className="flex">
+        <div className="w-2 shrink-0 bg-blue-600" />
+        <div className="flex-1 bg-blue-50 px-5 py-5">
+          {resume.header.name && (
+            <h3 className="text-2xl font-semibold tracking-tight text-slate-900">
+              {resume.header.name}
+            </h3>
+          )}
+          {resume.header.tagline && (
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
+              {resume.header.tagline}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Contact row — thin blue accent strip */}
+      {resume.header.contacts.length > 0 && (
+        <div className="flex">
+          <div className="w-2 shrink-0 bg-blue-200" />
+          <div className="flex-1 bg-blue-50/60 px-5 py-2.5">
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500">
               {resume.header.contacts.map((contact) => (
-                <p key={contact}>{contact}</p>
+                <span key={contact}>{contact}</span>
               ))}
             </div>
-          )}
-          <div className="mt-6 space-y-4">
-            {(compact ? sidebarSections.slice(0, 2) : sidebarSections).map((section, index) => (
-              <ResumeSectionBlock
-                key={`sidebar-${section.title}-${index}`}
-                section={section}
-                compact={compact}
-                accentClass="text-white"
-                titleClass="text-blue-100"
-                dividerClass="border-blue-500"
-              />
-            ))}
           </div>
-        </aside>
-        <main className="p-6 text-slate-900">
-          <div className="space-y-4">
-            {mainSections.slice(0, compact ? 3 : undefined).map((section, index) => (
-              <ResumeSectionBlock
-                key={`main-${section.title}-${index}`}
-                section={section}
-                compact={compact}
-                accentClass="text-blue-800"
-                titleClass="text-blue-700"
-                dividerClass="border-slate-200"
-              />
-            ))}
-          </div>
-        </main>
+        </div>
+      )}
+
+      {/* Body — left rail continues as blue-100, sections with blue pill accents */}
+      <div className="flex">
+        <div className="w-2 shrink-0 bg-blue-100" />
+        <div className="flex-1 space-y-5 p-5 text-slate-800">
+          {visibleSections.map((section) => {
+            const validEntries = section.entries.filter(
+              (e) => e.heading.trim() || e.bullets.length > 0
+            );
+            return (
+              <section key={section.title}>
+                {/* Section heading with small blue horizontal pill on the left */}
+                <div className="mb-2.5 flex items-center gap-2.5">
+                  <span className="inline-block h-1.5 w-5 shrink-0 rounded-full bg-blue-600" />
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-blue-700">
+                    {section.title}
+                  </h4>
+                </div>
+
+                <div className="space-y-2 pl-7">
+                  {section.paragraphs.map((paragraph, i) => (
+                    <p key={i} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
+                      {paragraph}
+                    </p>
+                  ))}
+
+                  {section.bullets.length > 0 && (
+                    <ul className="space-y-1 pl-3">
+                      {section.bullets.map((bullet, i) => (
+                        <li key={i} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
+                          {bullet}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {validEntries.map((entry, i) => (
+                    <article key={i} className="space-y-1 pt-1">
+                      {entry.heading && (
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+                          <h5 className={`${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-blue-800`}>
+                            {entry.heading}
+                          </h5>
+                          {entry.meta && (
+                            <p className={`${compact ? 'text-[9px]' : 'text-[11px]'} text-slate-500`}>
+                              {entry.meta}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {entry.bullets.length > 0 && (
+                        <ul className="space-y-1 pl-3">
+                          {entry.bullets.map((bullet, j) => (
+                            <li key={j} className={`${compact ? 'text-[10px]' : 'text-xs'} leading-relaxed`}>
+                              {bullet}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
 function renderEditorial(resume: ResumeDocument, compact: boolean) {
+  const visibleSections = resume.sections.filter(hasContent).slice(0, compact ? 3 : undefined);
   return (
     <div className="h-full rounded-[1.75rem] border border-stone-200 bg-stone-50 p-6 text-stone-900 shadow-sm">
       <div>
@@ -188,7 +257,7 @@ function renderEditorial(resume: ResumeDocument, compact: boolean) {
         </div>
       )}
       <div className="mt-6 space-y-4">
-        {resume.sections.slice(0, compact ? 3 : undefined).map((section, index) => (
+        {visibleSections.map((section, index) => (
           <ResumeSectionBlock
             key={`editorial-${section.title}-${index}`}
             section={section}
@@ -204,6 +273,7 @@ function renderEditorial(resume: ResumeDocument, compact: boolean) {
 }
 
 function renderSpotlight(resume: ResumeDocument, compact: boolean) {
+  const visibleSections = resume.sections.filter(hasContent).slice(0, compact ? 3 : undefined);
   return (
     <div className="h-full overflow-hidden rounded-[1.75rem] border border-amber-200 bg-white shadow-sm">
       <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-6 py-6 text-white">
@@ -213,7 +283,7 @@ function renderSpotlight(resume: ResumeDocument, compact: boolean) {
       </div>
       <div className="p-6 text-slate-900">
         <div className="space-y-4">
-          {resume.sections.slice(0, compact ? 3 : undefined).map((section, index) => (
+          {visibleSections.map((section, index) => (
             <ResumeSectionBlock
               key={`spotlight-${section.title}-${index}`}
               section={section}
@@ -230,6 +300,7 @@ function renderSpotlight(resume: ResumeDocument, compact: boolean) {
 }
 
 function renderMinimalGrid(resume: ResumeDocument, compact: boolean) {
+  const visibleSections = resume.sections.filter(hasContent).slice(0, compact ? 4 : undefined);
   return (
     <div className="h-full rounded-[1.75rem] border border-emerald-100 bg-white p-6 shadow-sm">
       <div className="grid gap-4 border-b border-emerald-100 pb-5 md:grid-cols-[1.25fr_0.75fr]">
@@ -237,14 +308,16 @@ function renderMinimalGrid(resume: ResumeDocument, compact: boolean) {
           {resume.header.name && <h3 className="text-2xl font-semibold tracking-tight text-slate-900">{resume.header.name}</h3>}
           {resume.header.tagline && <p className="mt-3 text-sm leading-relaxed text-slate-600">{resume.header.tagline}</p>}
         </div>
-        <div className="rounded-2xl bg-emerald-50 p-4 text-[11px] leading-relaxed text-emerald-900">
-          {resume.header.contacts.map((contact) => (
-            <p key={contact}>{contact}</p>
-          ))}
-        </div>
+        {resume.header.contacts.length > 0 && (
+          <div className="rounded-2xl bg-emerald-50 p-4 text-[11px] leading-relaxed text-emerald-900">
+            {resume.header.contacts.map((contact) => (
+              <p key={contact}>{contact}</p>
+            ))}
+          </div>
+        )}
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        {resume.sections.slice(0, compact ? 4 : undefined).map((section, index) => (
+        {visibleSections.map((section, index) => (
           <div key={`minimal-${section.title}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <ResumeSectionBlock
               section={section}
@@ -261,6 +334,7 @@ function renderMinimalGrid(resume: ResumeDocument, compact: boolean) {
 }
 
 function renderContrast(resume: ResumeDocument, compact: boolean) {
+  const visibleSections = resume.sections.filter(hasContent).slice(0, compact ? 3 : undefined);
   return (
     <div className="h-full rounded-[1.75rem] bg-slate-950 p-5 text-slate-50 shadow-inner">
       <div className="rounded-[1.4rem] border border-slate-700 bg-slate-900 p-5">
@@ -270,7 +344,7 @@ function renderContrast(resume: ResumeDocument, compact: boolean) {
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
-            {resume.sections.slice(0, compact ? 3 : undefined).map((section, index) => (
+            {visibleSections.map((section, index) => (
               <ResumeSectionBlock
                 key={`contrast-${section.title}-${index}`}
                 section={section}
@@ -281,14 +355,16 @@ function renderContrast(resume: ResumeDocument, compact: boolean) {
               />
             ))}
           </div>
-          <aside className="rounded-2xl bg-cyan-500/15 p-4 text-cyan-200">
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em]">Contact</p>
-            <div className="mt-3 space-y-2 text-xs leading-relaxed">
-              {resume.header.contacts.map((contact) => (
-                <p key={contact}>{contact}</p>
-              ))}
-            </div>
-          </aside>
+          {resume.header.contacts.length > 0 && (
+            <aside className="rounded-2xl bg-cyan-500/15 p-4 text-cyan-200">
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em]">Contact</p>
+              <div className="mt-3 space-y-2 text-xs leading-relaxed">
+                {resume.header.contacts.map((contact) => (
+                  <p key={contact}>{contact}</p>
+                ))}
+              </div>
+            </aside>
+          )}
         </div>
       </div>
     </div>
