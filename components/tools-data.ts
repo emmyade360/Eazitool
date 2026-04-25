@@ -5,7 +5,7 @@ const TOOL_COPY = {
     ai: {
       category: 'AI Tools',
       items: {
-        cvBuilder: ['ATS CV Builder', 'AI-powered, ATS-compliant resume builder via Groq'],
+        cvBuilder: ['ATS CV Builder', 'ATS-compliant CV builder'],
         roastCv: ['Roast My CV', 'Brutal ATS review with AI-powered fixes'],
       },
     },
@@ -157,7 +157,7 @@ const TOOL_COPY = {
     ai: {
       category: 'AI Tools',
       items: {
-        cvBuilder: ['ATS CV Builder', 'AI-powered, ATS-compliant resume builder via Groq'],
+        cvBuilder: ['ATS CV Builder', 'ATS-compliant CV builder'],
         roastCv: ['Roast My CV', 'Brutal ATS review with AI-powered fixes'],
       },
     },
