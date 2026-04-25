@@ -72,8 +72,8 @@ const TOOL_COPY = {
     imageTools: {
       category: "Outils d'image",
       items: {
-        resizer: "Redimensionneur d'image",
-        upscaler: "Ameliorateur d'image",
+        resizer: ["Redimensionneur d'image", 'Redimensionner les images avec des dimensions precises'],
+        upscaler: ["Ameliorateur d'image", "Agrandir les images jusqu'a 4x avec une haute qualite"],
       },
     },
   },
@@ -286,11 +286,8 @@ export function getToolCategories(language: LanguageCode) {
     icon: category.icon,
     color: category.color,
     items: category.items.map((item) => {
-      const localizedItems = copy[category.id].items as Record<string, readonly [string, string] | string>;
-      const itemData = localizedItems[item.id];
-      const [label, description] = Array.isArray(itemData)
-        ? itemData
-        : [itemData || item.id, ''];
+      const localizedItems = copy[category.id].items as Record<string, readonly [string, string]>;
+      const [label, description] = localizedItems[item.id];
       return {
         label,
         href: item.href,

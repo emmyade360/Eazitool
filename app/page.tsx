@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useLanguage } from "@/components/language-context";
 import { HOME_COPY } from "@/lib/i18n";
 
-const TOOLS_PAGE_HREF = "/tools";
-
 export default function Home() {
   const { language } = useLanguage();
   const copy = HOME_COPY[language] ?? HOME_COPY.en;
@@ -57,7 +55,7 @@ export default function Home() {
 
             <div className="flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
               <Link
-                href={TOOLS_PAGE_HREF}
+                href="/tools"
                 className="group inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-600 sm:px-8 sm:py-4 sm:text-base"
               >
                 {copy.primaryCta}
@@ -165,7 +163,7 @@ export default function Home() {
           <p className="mx-auto mt-3 max-w-2xl text-base text-blue-100 sm:text-lg">{copy.ctaBody}</p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row sm:mt-8">
             <Link
-              href={TOOLS_PAGE_HREF}
+              href="/tools"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-semibold text-blue-600 shadow-lg transition-all hover:bg-blue-50 sm:px-8 sm:py-4 sm:text-base"
             >
               {copy.ctaButton}
