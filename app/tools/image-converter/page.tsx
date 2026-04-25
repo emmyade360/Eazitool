@@ -119,7 +119,7 @@ function ImageConverterInner() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       const disposition = res.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="([^"]+)"/);
+      const match = disposition.match(/filename="((?:\\.|[^"\\])*)"/) || disposition.match(/filename=([^;\s]+)/);
       anchor.download = match ? match[1] : `converted.${targetFmt}`;
       anchor.href = url;
       anchor.click();

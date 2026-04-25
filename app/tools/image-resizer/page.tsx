@@ -287,7 +287,7 @@ export default function ImageResizerPage() {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const disposition = res.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="([^"]+)"/);
+      const match = disposition.match(/filename="((?:\\.|[^"\\])*)"/) || disposition.match(/filename=([^;\s]+)/);
       const filename = match ? match[1] : `resized.${format}`;
 
       const elapsed = Date.now() - startedAt;

@@ -26,6 +26,13 @@ const VALID_INPUT_TYPES = new Set([
 
 const VALID_FIT = new Set<string>(['contain', 'cover', 'fill', 'inside', 'outside']);
 
+function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '')
+    .replace(/\r/g, '');
+}
+
 async function normalizeToExactSize(
   inputBuffer: Buffer,
   targetWidth: number,
@@ -152,11 +159,12 @@ export async function POST(req: NextRequest) {
     const baseName  = file.name.replace(/\.[^.]+$/, '');
     const suffix    = [width, height].filter(Boolean).join('x');
     const filename  = `${baseName}_${suffix}.${EXT[format]}`;
+    const safeName = sanitizeFilename(filename);
 
     return new NextResponse(new Uint8Array(outBuffer), {
       headers: {
         'Content-Type': MIME[format],
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${safeName}"`,
         'X-Output-Width':  String(outMeta.width  ?? ''),
         'X-Output-Height': String(outMeta.height ?? ''),
       },

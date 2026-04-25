@@ -32,6 +32,13 @@ function clampQuality(value: number): number {
   return Math.max(1, Math.min(100, value));
 }
 
+function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '')
+    .replace(/\r/g, '');
+}
+
 function isHeicInput(file: File): boolean {
   return file.type === 'image/heic' || /\.(heic|heif)$/i.test(file.name);
 }
@@ -108,11 +115,12 @@ export async function POST(req: NextRequest) {
     const outBuffer = await pipeline.toBuffer();
     const baseName  = file.name.replace(/\.[^.]+$/, '');
     const filename  = `${baseName}.${EXT[to]}`;
+    const safeName = sanitizeFilename(filename);
 
     return new NextResponse(new Uint8Array(outBuffer), {
       headers: {
         'Content-Type': MIME[to],
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${safeName}"`,
       },
     });
   } catch (err) {

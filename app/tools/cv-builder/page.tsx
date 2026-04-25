@@ -390,7 +390,7 @@ export default function CVBuilderPage() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       const disposition = response.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="([^"]+)"/);
+      const match = disposition.match(/filename="((?:\\.|[^"\\])*)"/) || disposition.match(/filename=([^;\s]+)/);
       anchor.download = match ? match[1] : `cv.${exportFormat}`;
       anchor.href = url;
       anchor.click();

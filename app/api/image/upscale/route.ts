@@ -22,6 +22,13 @@ const VALID_INPUT_TYPES = new Set([
   'image/tiff', 'image/heif', 'image/heic',
 ]);
 
+function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '')
+    .replace(/\r/g, '');
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form    = await req.formData();
@@ -85,11 +92,12 @@ export async function POST(req: NextRequest) {
     const outBuffer = await pipeline.toBuffer();
     const baseName  = file.name.replace(/\.[^.]+$/, '');
     const filename  = `${baseName}_${scale}x.${EXT[format]}`;
+    const safeName = sanitizeFilename(filename);
 
     return new NextResponse(new Uint8Array(outBuffer), {
       headers: {
         'Content-Type': MIME[format],
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${safeName}"`,
         'X-Original-Width':  String(origW),
         'X-Original-Height': String(origH),
         'X-Output-Width':    String(newW),
