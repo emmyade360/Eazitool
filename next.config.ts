@@ -42,12 +42,19 @@ const nextConfig: NextConfig = {
         { key: "Cache-Control", value: "no-store" },
       ],
     },
-    {
-      source: "/_next/static/(.*)",
-      headers: [
-        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-      ],
-    },
+    // Only apply immutable caching in production — dev bundles reuse the same
+    // filename (module-ID hash, not content hash), so immutable caching in dev
+    // causes the browser to serve stale JS after source changes.
+    ...(process.env.NODE_ENV === "production"
+      ? [
+          {
+            source: "/_next/static/(.*)",
+            headers: [
+              { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+            ],
+          },
+        ]
+      : []),
   ],
 };
 

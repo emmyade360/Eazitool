@@ -359,8 +359,11 @@ export default function ImageResizerPage() {
             >
               <input
                 ref={inputRef}
+                id="image-file-upload"
+                name="image-file-upload"
                 type="file"
                 className="hidden"
+                aria-label="Upload image"
                 accept=".jpg,.jpeg,.png,.webp,.avif,.gif,.tiff,.tif,.heif,.heic,.svg"
                 onChange={(event) => {
                   const chosenFile = event.target.files?.[0];
@@ -424,8 +427,10 @@ export default function ImageResizerPage() {
               {!usePercent ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1.5 font-medium">{copy.width}</label>
+                    <label htmlFor="resize-width" className="block text-xs text-slate-500 mb-1.5 font-medium">{copy.width}</label>
                     <input
+                      id="resize-width"
+                      name="resize-width"
                       type="number"
                       min={1}
                       max={16000}
@@ -436,8 +441,10 @@ export default function ImageResizerPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1.5 font-medium">{copy.height}</label>
+                    <label htmlFor="resize-height" className="block text-xs text-slate-500 mb-1.5 font-medium">{copy.height}</label>
                     <input
+                      id="resize-height"
+                      name="resize-height"
                       type="number"
                       min={1}
                       max={16000}
@@ -451,6 +458,8 @@ export default function ImageResizerPage() {
               ) : (
                 <div>
                   <input
+                    id="resize-percent"
+                    name="resize-percent"
                     type="range"
                     min={10}
                     max={100}
@@ -459,6 +468,7 @@ export default function ImageResizerPage() {
                     disabled={!meta}
                     onChange={(event) => setResizePercent(Number(event.target.value))}
                     className="w-full accent-indigo-600 disabled:opacity-50"
+                    aria-label="Resize percentage"
                   />
                   <div className="mt-3 flex items-center justify-between text-xs">
                     <span className="text-slate-400">10% of original</span>
@@ -528,12 +538,15 @@ export default function ImageResizerPage() {
                   <span className="text-sm font-bold text-indigo-600">{quality}%</span>
                 </div>
                 <input
+                  id="quality-range"
+                  name="quality"
                   type="range"
                   min={10}
                   max={100}
                   value={quality}
                   onChange={(event) => setQuality(Number(event.target.value))}
                   className="w-full accent-indigo-600"
+                  aria-label={copy.quality}
                 />
                 <div className="flex justify-between text-xs text-slate-400 mt-1">
                   <span>{copy.smallest}</span>

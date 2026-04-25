@@ -244,9 +244,12 @@ function DocumentConverterInner() {
             >
               <input
                 ref={inputRef}
+                id="document-file-upload"
+                name="document-file-upload"
                 type="file"
                 accept={acceptedInput}
                 className="hidden"
+                aria-label="Upload document"
                 onChange={(event) => {
                   const nextFile = event.target.files?.[0];
                   if (nextFile) {

@@ -14,11 +14,16 @@ import {
   HtmlTemplatePreview,
 } from '@/components/cv-preview';
 import dynamic from 'next/dynamic';
-import { submitReview, type Review } from '@/lib/supabase';
+import { submitReview } from '@/lib/supabase';
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 
 type Experience = { company: string; role: string; duration: string; bullets: string };
 type Education = { institution: string; degree: string; year: string };
+type ReviewState = {
+  rating: number;
+  comment: string;
+  documentType: string;
+};
 type SectionId =
   | 'summary'
   | 'experience'
@@ -249,7 +254,6 @@ export default function CVBuilderPage() {
     label: string;
     html: string;
   }>>([]);
-  const [selectedProfessionalId, setSelectedProfessionalId] = useState<ProfessionalTemplateId>('harvard');
   const [generatingProfessional, setGeneratingProfessional] = useState(false);
   const [selectedProfessionalTemplate, setSelectedProfessionalTemplate] = useState<{
     id: ProfessionalTemplateId;
@@ -258,11 +262,10 @@ export default function CVBuilderPage() {
   } | null>(null);
   const [profExportFormat, setProfExportFormat] = useState<'pdf' | 'docx'>('pdf');
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewData, setReviewData] = useState({
+  const [reviewData, setReviewData] = useState<ReviewState>({
     rating: 0,
     comment: '',
     documentType: '',
-    pendingDownload: null as null | { type: string; data: any },
   });
 
   function setPersonalField(key: keyof typeof personal, value: string) {
@@ -510,7 +513,7 @@ export default function CVBuilderPage() {
         user_email: personal.email || undefined,
       });
       setShowReviewModal(false);
-      setReviewData({ rating: 0, comment: '', documentType: '', pendingDownload: null });
+      setReviewData({ rating: 0, comment: '', documentType: '' });
     } catch (err) {
       console.error('Failed to submit review:', err);
     }

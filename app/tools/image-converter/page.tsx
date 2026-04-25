@@ -196,12 +196,15 @@ function ImageConverterInner() {
                   <span className="text-sm font-bold text-emerald-600">{quality}%</span>
                 </div>
                 <input
+                  id="quality-range"
+                  name="quality"
                   type="range"
                   min={10}
                   max={100}
                   value={quality}
                   onChange={(event) => setQuality(Number(event.target.value))}
                   className="w-full accent-emerald-600"
+                  aria-label={copy.quality}
                 />
                 <div className="mt-1 flex justify-between text-xs text-slate-400">
                   <span>{copy.smallest}</span>
@@ -222,8 +225,11 @@ function ImageConverterInner() {
             >
               <input
                 ref={inputRef}
+                id="image-file-upload"
+                name="image-file-upload"
                 type="file"
                 className="hidden"
+                aria-label="Upload image"
                 accept={FORMAT_ACCEPT[targetFmt]}
                 onChange={(event) => {
                   const chosenFile = event.target.files?.[0];

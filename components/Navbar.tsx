@@ -35,10 +35,15 @@ export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close drawer on navigation
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+    if (!mobileOpen) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setMobileOpen(false);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname, mobileOpen]);
 
   // Lock body scroll while mobile menu is open
   useEffect(() => {

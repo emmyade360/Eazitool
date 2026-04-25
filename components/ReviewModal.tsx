@@ -15,23 +15,24 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
   const [hovered, setHovered] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [blockedForToday, setBlockedForToday] = useState(false);
 
   // Auto-dismiss if this tool was already reviewed today
   useEffect(() => {
-    if (isOpen && hasReviewedToday(documentType)) {
+    if (!isOpen) {
+      setBlockedForToday(false);
+      return;
+    }
+
+    const alreadyReviewed = hasReviewedToday(documentType);
+    setBlockedForToday(alreadyReviewed);
+    if (alreadyReviewed) {
       onClose();
     }
   }, [isOpen, documentType, onClose]);
 
-  // Mark as "seen today" the moment the modal opens so it won't show again today
-  useEffect(() => {
-    if (isOpen && !hasReviewedToday(documentType)) {
-      markReviewed(documentType);
-    }
-  }, [isOpen, documentType]);
-
   // Don't render if not open or already reviewed (second open same day)
-  if (!isOpen || hasReviewedToday(documentType)) return null;
+  if (!isOpen || blockedForToday) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,9 +41,11 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
     setSubmitting(true);
     try {
       await onSubmit({ rating, comment, documentType });
+      markReviewed(documentType);
       setRating(0);
       setHovered(0);
       setComment('');
+      onClose();
     } catch {
       // parent swallows errors
     } finally {
@@ -51,6 +54,7 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
   };
 
   const handleSkip = () => {
+    markReviewed(documentType);
     setRating(0);
     setHovered(0);
     setComment('');

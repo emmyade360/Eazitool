@@ -6,6 +6,7 @@ const TOOL_COPY = {
       category: 'AI Tools',
       items: {
         cvBuilder: ['ATS CV Builder', 'AI-powered, ATS-compliant resume builder via Groq'],
+        roastCv: ['Roast My CV', 'Brutal ATS review with AI-powered fixes'],
       },
     },
     document: {
@@ -43,6 +44,7 @@ const TOOL_COPY = {
       category: 'Outils IA',
       items: {
         cvBuilder: ['Createur de CV ATS', 'Createur de CV compatible ATS alimente par IA'],
+        roastCv: ['Roast My CV', 'Avis brutal ATS avec corrections IA'],
       },
     },
     document: {
@@ -70,8 +72,8 @@ const TOOL_COPY = {
     imageTools: {
       category: "Outils d'image",
       items: {
-        resizer: ["Redimensionneur d'image", 'Redimensionner les images avec des dimensions precises'],
-        upscaler: ["Ameliorateur d'image", "Agrandir les images jusqu'a 4x avec une haute qualite"],
+        resizer: "Redimensionneur d'image",
+        upscaler: "Ameliorateur d'image",
       },
     },
   },
@@ -80,6 +82,7 @@ const TOOL_COPY = {
       category: 'Herramientas con IA',
       items: {
         cvBuilder: ['Creador de CV ATS', 'Creador de curriculums con IA compatible con ATS'],
+        roastCv: ['Roast My CV', 'Revisión brutal ATS con soluciones IA'],
       },
     },
     document: {
@@ -116,7 +119,8 @@ const TOOL_COPY = {
     ai: {
       category: 'Ferramentas com IA',
       items: {
-        cvBuilder: ['Criador de CV ATS', 'Criador de curriculos com IA compativel com ATS'],
+        cvBuilder: ['Criador de CV ATS', 'Criador de curriculums com IA compativel com ATS'],
+        roastCv: ['Roast My CV', 'Análise brutal ATS com correções de IA'],
       },
     },
     document: {
@@ -154,6 +158,7 @@ const TOOL_COPY = {
       category: 'AI Tools',
       items: {
         cvBuilder: ['ATS CV Builder', 'AI-powered, ATS-compliant resume builder via Groq'],
+        roastCv: ['Roast My CV', 'Brutal ATS review with AI-powered fixes'],
       },
     },
     document: {
@@ -191,6 +196,7 @@ const TOOL_COPY = {
       category: 'Zana za AI',
       items: {
         cvBuilder: ['Mtengenezaji wa CV wa ATS', 'Tengeneza CV za ATS kwa msaada wa AI'],
+        roastCv: ['Roast My CV', 'Mapitio ya ATS kali na marekebisho ya AI'],
       },
     },
     document: {
@@ -232,6 +238,7 @@ const BASE_TOOL_CATEGORIES = [
     color: 'blue',
     items: [
       { id: 'cvBuilder', href: '/tools/cv-builder', badge: 'AI', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z' },
+      { id: 'roastCv', href: '/roast-cv', badge: 'ROAST', icon: 'M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z' },
     ],
   },
   {
@@ -279,8 +286,11 @@ export function getToolCategories(language: LanguageCode) {
     icon: category.icon,
     color: category.color,
     items: category.items.map((item) => {
-      const localizedItems = copy[category.id].items as Record<string, readonly [string, string]>;
-      const [label, description] = localizedItems[item.id];
+      const localizedItems = copy[category.id].items as Record<string, readonly [string, string] | string>;
+      const itemData = localizedItems[item.id];
+      const [label, description] = Array.isArray(itemData)
+        ? itemData
+        : [itemData || item.id, ''];
       return {
         label,
         href: item.href,

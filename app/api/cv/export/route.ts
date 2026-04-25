@@ -29,10 +29,8 @@ function splitSectionsForSidebar(resume: ResumeDocument) {
 
 async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
   const {
-    AlignmentType,
     BorderStyle,
     Document,
-    HeadingLevel,
     Packer,
     Paragraph,
     ShadingType,

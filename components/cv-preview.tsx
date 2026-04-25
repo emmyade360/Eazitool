@@ -1,15 +1,12 @@
 'use client';
 
 import {
-  CV_TEMPLATE_IDS,
-  CV_TEMPLATE_META,
   parseResumeMarkdown,
   type CVTemplateId,
   type CVVariant,
   type ResumeDocument,
   type ResumeSection,
 } from '@/lib/cv-document';
-import { PROFESSIONAL_TEMPLATE_META, type ProfessionalTemplateId } from '@/lib/cv-templates';
 import { sanitizeHtml } from '@/lib/sanitize';
 
 export { CV_TEMPLATE_IDS, CV_TEMPLATE_META, type CVTemplateId, type CVVariant } from '@/lib/cv-document';

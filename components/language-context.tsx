@@ -5,12 +5,10 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import {
-  detectPreferredLanguage,
   getDirection,
   LANGUAGE_OPTIONS,
   STORAGE_KEY,
@@ -38,26 +36,10 @@ export function LanguageProvider({
   initialLanguage: LanguageCode;
 }) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
-  const isInitialized = useRef(false);
-
-  useEffect(() => {
-    if (isInitialized.current) return;
-    isInitialized.current = true;
-
-    const saved = window.localStorage.getItem(STORAGE_KEY) as LanguageCode | null;
-    if (saved && LANGUAGE_OPTIONS.some((item) => item.code === saved)) {
-      setLanguage(saved);
-      return;
-    }
-
-    const detected = detectPreferredLanguage(window.navigator.languages);
-    if (detected !== initialLanguage) {
-      setLanguage(detected);
-    }
-  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, language);
+    document.cookie = `${STORAGE_KEY}=${language}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.documentElement.lang = language;
     document.documentElement.dir = getDirection(language);
   }, [language]);

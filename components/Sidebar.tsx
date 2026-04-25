@@ -16,38 +16,43 @@ const staticItems = [
   { label: 'Home', href: '/', d: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
 ];
 
+function getOpenCategories(
+  pathname: string,
+  toolCategories: ReturnType<typeof getToolCategories>
+): Record<string, boolean> {
+  return Object.fromEntries(
+    toolCategories.map((cat) => [
+      cat.category,
+      cat.items.some((item) => pathname === item.href.split('?')[0]),
+    ])
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { language, t } = useLanguage();
   const toolCategories = useMemo(() => getToolCategories(language), [language]);
   const [toolsOpen, setToolsOpen] = useState(() => pathname.startsWith('/tools'));
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      toolCategories.map((cat) => [
-        cat.category,
-        cat.items.some((item) => pathname === item.href.split('?')[0]),
-      ])
-    )
+    getOpenCategories(pathname, toolCategories)
   );
 
   useEffect(() => {
-    const nextOpenCategories = Object.fromEntries(
-      toolCategories.map((cat) => [
-        cat.category,
-        cat.items.some((item) => pathname === item.href.split('?')[0]),
-      ])
-    );
+    const nextOpenCategories = getOpenCategories(pathname, toolCategories);
+    const frame = window.requestAnimationFrame(() => {
+      setOpenCategories((current) => {
+        const currentKeys = Object.keys(current);
+        const nextKeys = Object.keys(nextOpenCategories);
 
-    setOpenCategories((current) => {
-      const currentKeys = Object.keys(current);
-      const nextKeys = Object.keys(nextOpenCategories);
+        const isSame =
+          currentKeys.length === nextKeys.length &&
+          nextKeys.every((key) => current[key] === nextOpenCategories[key]);
 
-      const isSame =
-        currentKeys.length === nextKeys.length &&
-        nextKeys.every((key) => current[key] === nextOpenCategories[key]);
-
-      return isSame ? current : nextOpenCategories;
+        return isSame ? current : nextOpenCategories;
+      });
     });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [pathname, toolCategories]);
 
   return (

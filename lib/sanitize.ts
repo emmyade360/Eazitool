@@ -14,11 +14,6 @@ const ALLOWED_TAGS = new Set([
   'table', 'thead', 'tbody', 'tr', 'td', 'th',
 ]);
 
-const ALLOWED_ATTRIBUTES = new Set([
-  'class', 'id', 'style', 'href', 'target', 'rel',
-  'colspan', 'rowspan', 'width', 'height',
-]);
-
 export function sanitizeHtml(html: string): string {
   // Remove script tags and their content
   html = html.replace(/<script[\s\S]*?<\/script>/gi, '');

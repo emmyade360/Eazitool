@@ -153,7 +153,7 @@ type ToolCategoryItemCopy = {
   items: Record<string, { label: string; description: string }>;
 };
 
-const TOOL_CATEGORY_COPY: Record<LanguageCode, Record<string, ToolCategoryItemCopy>> = {
+export const TOOL_CATEGORY_COPY: Record<LanguageCode, Record<string, ToolCategoryItemCopy>> = {
   en: {
     ai: {
       category: "AI Tools",

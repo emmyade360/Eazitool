@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MobileNav from "@/components/MobileNav";
 import { LanguageProvider } from "@/components/language-context";
 import { absoluteUrl, siteConfig } from "./seo";
-import { getDirection, resolveLanguageCode } from "@/lib/i18n";
+import { getDirection, LANGUAGE_OPTIONS, resolveLanguageCode, type LanguageCode } from "@/lib/i18n";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -64,8 +64,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
   const headerStore = await headers();
-  const initialLanguage = resolveLanguageCode(headerStore.get("accept-language"));
+  const savedLanguage = cookieStore.get("eazitool-language")?.value;
+  const hasSavedLanguage = LANGUAGE_OPTIONS.some((item) => item.code === savedLanguage);
+  const initialLanguage: LanguageCode = hasSavedLanguage
+    ? (savedLanguage as LanguageCode)
+    : resolveLanguageCode(headerStore.get("accept-language"));
 
   const websiteSchema = {
     "@context": "https://schema.org",
