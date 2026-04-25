@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
+const DEFAULT_MAX_UPLOAD_MB = 4;
+const MAX_UPLOAD_MB = Number.parseFloat(process.env.DOCUMENT_CONVERTER_MAX_MB ?? '') || DEFAULT_MAX_UPLOAD_MB;
+const MAX_UPLOAD_BYTES = Math.floor(MAX_UPLOAD_MB * 1024 * 1024);
+
 type RenderedPage = { data: Buffer; width: number; height: number };
 
 type InlineStyle = {
@@ -317,6 +321,13 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (buffer.byteLength > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: `File too large. Please upload a file smaller than ${MAX_UPLOAD_MB} MB.` },
+        { status: 413 }
+      );
+    }
 
     if (from === 'pdf' && to === 'docx') {
       const { AlignmentType, Document, ImageRun, Packer, Paragraph, TextRun } = await import('docx');

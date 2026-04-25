@@ -22,6 +22,10 @@ const ACCEPT_BY_FORMAT: Record<Format, string> = {
   txt: '.txt',
 };
 
+const DEFAULT_MAX_UPLOAD_MB = 4;
+const MAX_UPLOAD_MB = Number.parseFloat(process.env.NEXT_PUBLIC_DOCUMENT_CONVERTER_MAX_MB ?? '') || DEFAULT_MAX_UPLOAD_MB;
+const MAX_UPLOAD_BYTES = Math.floor(MAX_UPLOAD_MB * 1024 * 1024);
+
 const PAGE_COPY = {
   en: {
     title: 'Document Converter',
@@ -35,6 +39,8 @@ const PAGE_COPY = {
     loading: 'Converting...',
     preview: 'Selected conversion',
     done: 'Your converted document is downloading.',
+    safeLimit: `Safe upload limit: ${MAX_UPLOAD_MB} MB per file.`,
+    acceptedWithLimit: `PDF, DOCX, and TXT files are supported up to ${MAX_UPLOAD_MB} MB.`,
   },
   fr: {
     title: 'Convertisseur de documents',
@@ -48,6 +54,8 @@ const PAGE_COPY = {
     loading: 'Conversion...',
     preview: 'Conversion selectionnee',
     done: 'Votre document converti est en cours de telechargement.',
+    safeLimit: `Limite de televersement sure : ${MAX_UPLOAD_MB} MB par fichier.`,
+    acceptedWithLimit: `Fichiers PDF, DOCX et TXT pris en charge jusqu'a ${MAX_UPLOAD_MB} MB.`,
   },
   es: {
     title: 'Convertidor de documentos',
@@ -61,6 +69,8 @@ const PAGE_COPY = {
     loading: 'Convirtiendo...',
     preview: 'Conversion seleccionada',
     done: 'Tu documento convertido se esta descargando.',
+    safeLimit: `Limite de carga segura: ${MAX_UPLOAD_MB} MB por archivo.`,
+    acceptedWithLimit: `Se admiten archivos PDF, DOCX y TXT de hasta ${MAX_UPLOAD_MB} MB.`,
   },
   pt: {
     title: 'Conversor de documentos',
@@ -74,6 +84,8 @@ const PAGE_COPY = {
     loading: 'A converter...',
     preview: 'Conversao selecionada',
     done: 'O seu documento convertido esta a transferir.',
+    safeLimit: `Limite seguro de carregamento: ${MAX_UPLOAD_MB} MB por ficheiro.`,
+    acceptedWithLimit: `Ficheiros PDF, DOCX e TXT suportados ate ${MAX_UPLOAD_MB} MB.`,
   },
   ar: {
     title: 'Document Converter',
@@ -87,6 +99,8 @@ const PAGE_COPY = {
     loading: 'Converting...',
     preview: 'Selected conversion',
     done: 'Your converted document is downloading.',
+    safeLimit: `Safe upload limit: ${MAX_UPLOAD_MB} MB per file.`,
+    acceptedWithLimit: `PDF, DOCX, and TXT files are supported up to ${MAX_UPLOAD_MB} MB.`,
   },
   sw: {
     title: 'Kibadilishi cha hati',
@@ -100,6 +114,8 @@ const PAGE_COPY = {
     loading: 'Inabadilisha...',
     preview: 'Badiliko lililochaguliwa',
     done: 'Hati yako iliyobadilishwa inapakuliwa.',
+    safeLimit: `Kiwango salama cha kupakia: ${MAX_UPLOAD_MB} MB kwa faili.`,
+    acceptedWithLimit: `Faili za PDF, DOCX na TXT zinaungwa mkono hadi ${MAX_UPLOAD_MB} MB.`,
   },
 } as const;
 
@@ -120,9 +136,37 @@ function DocumentConverterInner() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const acceptedInput = useMemo(() => ACCEPT_BY_FORMAT[from], [from]);
+  const isOversized = !!file && file.size > MAX_UPLOAD_BYTES;
+
+  async function getErrorMessage(res: Response): Promise<string> {
+    const contentType = res.headers.get('Content-Type') ?? '';
+
+    if (contentType.includes('application/json')) {
+      const payload = (await res.json()) as { error?: string };
+      return payload.error ?? 'Conversion failed';
+    }
+
+    const raw = (await res.text()).trim();
+    const lower = raw.toLowerCase();
+
+    if (res.status === 413 || lower.includes('request entity too large') || lower.includes('payload too large')) {
+      return `This file is too large for the current upload limit. Please use a file smaller than ${MAX_UPLOAD_MB} MB.`;
+    }
+
+    if (raw) {
+      return raw.length > 180 ? `${raw.slice(0, 177)}...` : raw;
+    }
+
+    return `Conversion failed (${res.status})`;
+  }
 
   async function convert() {
     if (!file) return;
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The current upload limit is ${MAX_UPLOAD_MB} MB.`);
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -136,8 +180,7 @@ function DocumentConverterInner() {
 
       const res = await fetch('/api/convert/document', { method: 'POST', body: form });
       if (!res.ok) {
-        const payload = (await res.json()) as { error?: string };
-        throw new Error(payload.error ?? 'Conversion failed');
+        throw new Error(await getErrorMessage(res));
       }
 
       const blob = await res.blob();
@@ -253,6 +296,13 @@ function DocumentConverterInner() {
                 onChange={(event) => {
                   const nextFile = event.target.files?.[0];
                   if (nextFile) {
+                    if (nextFile.size > MAX_UPLOAD_BYTES) {
+                      setFile(null);
+                      setDone(false);
+                      setError(`This file is ${Math.ceil(nextFile.size / (1024 * 1024))} MB. The safe upload limit is ${MAX_UPLOAD_MB} MB.`);
+                      event.target.value = '';
+                      return;
+                    }
                     setFile(nextFile);
                     setDone(false);
                     setError('');
@@ -272,9 +322,13 @@ function DocumentConverterInner() {
               ) : (
                 <div>
                   <p className="text-sm font-semibold text-violet-700">{copy.upload}</p>
-                  <p className="mt-1 text-xs text-slate-400">{copy.accepted}</p>
+                  <p className="mt-1 text-xs text-slate-400">{copy.acceptedWithLimit}</p>
                 </div>
               )}
+            </div>
+
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {copy.safeLimit}
             </div>
 
             {error && <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
@@ -283,7 +337,7 @@ function DocumentConverterInner() {
             <button
               type="button"
               onClick={convert}
-              disabled={!file || loading || from === to}
+              disabled={!file || loading || from === to || isOversized}
               className="w-full rounded-xl bg-violet-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-200 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? copy.loading : `${copy.button} ->`}
@@ -308,8 +362,9 @@ function DocumentConverterInner() {
                 </div>
                 <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-white p-4">
                   <p className="text-sm text-slate-500">
-                    {file ? file.name : copy.accepted}
+                    {file ? file.name : copy.acceptedWithLimit}
                   </p>
+                  <p className="mt-2 text-xs text-slate-400">{copy.safeLimit}</p>
                 </div>
               </div>
             </div>
