@@ -36,7 +36,7 @@ const HEADING_SIZES: Record<string, number> = {
   h6: 12,
 };
 
-async function pdfPagesToImages(buffer: Buffer): Promise<RenderedPage[]> {
+async function pdfPagesToImages(buffer: Buffer, reverseOrder = true): Promise<RenderedPage[]> {
   const { pdf } = await import('pdf-to-img');
   const sharp = (await import('sharp')).default;
 
@@ -57,7 +57,9 @@ async function pdfPagesToImages(buffer: Buffer): Promise<RenderedPage[]> {
     });
   }
 
-  return pages;
+  // pdf-to-img v6 returns pages in reverse order (last page first)
+  // Reverse to ensure correct page order in output document
+  return reverseOrder ? pages.reverse() : pages;
 }
 
 async function parsePDFText(buffer: Buffer): Promise<string> {
