@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
 
   experimental: {
     optimizePackageImports: ["@supabase/supabase-js", "groq-sdk"],
+    // Disable CSS sub-chunking to prevent orphaned preload hints in dev mode.
+    // Next.js splits globals.css into layer sub-chunks (e.g. .0u.css) and
+    // preloads them, but webpack HMR injects styles via a different channel,
+    // leaving the preloaded URL unused and triggering the browser warning.
+    cssChunking: false,
   },
 
   headers: async () => [
