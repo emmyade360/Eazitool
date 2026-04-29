@@ -602,10 +602,10 @@ export async function POST(req: NextRequest) {
       const { value: rawHtml } = await mammoth.convertToHtml(
         { buffer },
         {
-          convertImage: mammoth.images.inline(async (image) => {
+          convertImage: async (image) => {
             const imgBuffer = await image.read();
             return { src: `data:${image.contentType};base64,${imgBuffer.toString('base64')}` };
-          }),
+          },
           styleMap: [
             "p[style-name='Title'] => h1:fresh",
             "p[style-name='Subtitle'] => h2:fresh",
