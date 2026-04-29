@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLanguage } from './language-context';
+import ReportIssueModal from './ReportIssueModal';
 import type { LanguageCode } from '@/lib/i18n';
 
 const LANGUAGE_FLAGS: Record<LanguageCode, string> = {
@@ -103,6 +104,7 @@ export default function Navbar() {
   const { t } = useLanguage();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Close the menu whenever the route changes (link was tapped)
   useEffect(() => {
@@ -145,6 +147,17 @@ export default function Navbar() {
             </Link>
           ))}
           <LanguageSelector />
+          <button
+            onClick={() => setReportOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-blue-400 transition-colors hover:bg-red-50 hover:text-red-500"
+            aria-label="Report an issue"
+            title="Report an issue"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </button>
         </div>
 
         {/* Mobile right side: flag selector + hamburger */}
@@ -195,10 +208,22 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
+              <button
+                onClick={() => { setMobileOpen(false); setReportOpen(true); }}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                Report an Issue
+              </button>
             </div>
           </div>
         </>
       )}
+
+      <ReportIssueModal open={reportOpen} onClose={() => setReportOpen(false)} />
     </>
   );
 }
