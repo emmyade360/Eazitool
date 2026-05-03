@@ -3,6 +3,7 @@ import { siteConfig } from "./seo";
 
 const routes = [
   "",
+  "/privacy",
   "/tools/cv-builder",
   "/tools/document-converter",
   "/tools/image-converter",

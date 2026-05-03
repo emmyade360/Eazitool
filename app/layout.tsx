@@ -91,6 +91,9 @@ export default async function RootLayout({
 
   return (
     <html lang={initialLanguage} dir={getDirection(initialLanguage)} data-scroll-behavior="smooth">
+      <head>
+        <meta name="google-adsense-account" content="ca-pub-6908793973331683" />
+      </head>
       <body className="min-h-screen bg-white">
         <LanguageProvider initialLanguage={initialLanguage}>
           <script

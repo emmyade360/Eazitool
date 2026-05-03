@@ -120,6 +120,7 @@ export default function Navbar() {
   const navLinks = [
     { href: '/', label: t('nav.home') },
     { href: '/tools', label: t('nav.tools') },
+    { href: '/privacy', label: 'Privacy' },
   ];
 
   return (
