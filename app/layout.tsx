@@ -93,6 +93,11 @@ export default async function RootLayout({
     <html lang={initialLanguage} dir={getDirection(initialLanguage)} data-scroll-behavior="smooth">
       <head>
         <meta name="google-adsense-account" content="ca-pub-6908793973331683" />
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6908793973331683"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className="min-h-screen bg-white">
         <LanguageProvider initialLanguage={initialLanguage}>
