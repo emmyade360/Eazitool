@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MobileNav from "@/components/MobileNav";
+import AdSenseUnit from "@/components/AdSenseUnit";
 import { LanguageProvider } from "@/components/language-context";
 import { absoluteUrl, siteConfig } from "./seo";
 import { getDirection, LANGUAGE_OPTIONS, resolveLanguageCode, type LanguageCode } from "@/lib/i18n";
@@ -110,6 +111,7 @@ export default async function RootLayout({
             dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
           />
           <Navbar />
+          <AdSenseUnit className="py-4" />
           {/* pt-16 clears fixed navbar; pb-16 md:pb-0 clears mobile bottom nav */}
           <main className="pt-16 pb-16 md:pb-0">
             {children}

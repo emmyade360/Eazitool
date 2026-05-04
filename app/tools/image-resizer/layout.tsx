@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { buildMetadata } from "@/app/seo";
+import AdSenseUnit from "@/components/AdSenseUnit";
 
 export const metadata = buildMetadata({
   title: "Free Image Resizer Online | Resize Images to Exact Dimensions | Eazitool",
@@ -20,5 +21,10 @@ export default function ImageResizerLayout({
 }: {
   children: ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {children}
+      <AdSenseUnit className="py-8" />
+    </>
+  );
 }

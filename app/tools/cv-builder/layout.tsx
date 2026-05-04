@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { buildMetadata } from "@/app/seo";
+import AdSenseUnit from "@/components/AdSenseUnit";
 
 export const metadata = buildMetadata({
   title: "Free ATS Resume Builder Online | AI CV Maker | Eazitool",
@@ -17,5 +18,10 @@ export const metadata = buildMetadata({
 });
 
 export default function CVBuilderLayout({ children }: { children: ReactNode }) {
-  return children;
+  return (
+    <>
+      {children}
+      <AdSenseUnit className="py-8" />
+    </>
+  );
 }

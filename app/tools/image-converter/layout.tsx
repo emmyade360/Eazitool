@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { buildMetadata } from "@/app/seo";
+import AdSenseUnit from "@/components/AdSenseUnit";
 
 export const metadata = buildMetadata({
   title: "Free Image Format Converter Online | PNG, JPEG, WebP | Eazitool",
@@ -21,5 +22,10 @@ export default function ImageConverterLayout({
 }: {
   children: ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {children}
+      <AdSenseUnit className="py-8" />
+    </>
+  );
 }
