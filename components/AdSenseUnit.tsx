@@ -9,14 +9,14 @@ declare global {
 }
 
 const ADSENSE_CLIENT = "ca-pub-6908793973331683";
-const ADSENSE_SLOT = "3613679664";
+const ADSENSE_SLOT = "6453571787";
 
 type AdSenseUnitProps = {
   className?: string;
   label?: string;
 };
 
-export default function AdSenseUnit({ className = "", label = "Advertisement" }: AdSenseUnitProps) {
+export default function AdSenseUnit({ className = "", label = "eazit" }: AdSenseUnitProps) {
   const pushedRef = useRef(false);
 
   useEffect(() => {
