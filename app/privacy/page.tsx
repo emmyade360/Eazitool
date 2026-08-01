@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "Privacy policy for Eazitool, including ads, cookies, and file processing disclosures.",
+  description: "Privacy policy for Eazitool, including file processing, browser storage and AI disclosures.",
 };
 
 export default function PrivacyPage() {
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-500">Privacy</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-blue-900 sm:text-4xl">Privacy Policy</h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-            This page explains how Eazitool handles cookies, ads, and uploaded files. It is written to support ad platform review and user transparency.
+            This page explains how Eazitool handles files, browser storage and third-party processing.
           </p>
         </div>
 
@@ -27,12 +27,9 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-bold text-slate-900">Ads and cookies</h2>
+            <h2 className="text-lg font-bold text-slate-900">Browser storage</h2>
             <p className="text-sm leading-7 text-slate-600">
-              Eazitool may display ads through Google AdSense. Google and its partners may use cookies and similar technologies to serve ads based on your visits to this site and other sites on the internet.
-            </p>
-            <p className="text-sm leading-7 text-slate-600">
-              You can manage ad personalization through your Google Ads Settings and other consent or privacy controls available in your region.
+              Eazitool does not currently display advertising or use advertising cookies. Some tools save preferences or a business profile in your browser&apos;s local storage so you do not have to type the same details again. This information stays on your device unless you clear it.
             </p>
           </section>
 
@@ -44,16 +41,32 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-lg font-bold text-slate-900">AI processing</h2>
+            <p className="text-sm leading-7 text-slate-600">
+              Some tools (the CV builder, Roast My CV, and the optional plain-language explanation in
+              the Scam Message Checker) send text to a third-party AI provider (Groq) to generate
+              their output. For the Scam Message Checker, personal information such as phone numbers,
+              account numbers and names is hidden in your browser before anything is sent, and you can
+              review exactly what will be shared. We do not store these requests, and request contents
+              are not written to our logs.
+            </p>
+            <p className="text-sm leading-7 text-slate-600">
+              Tools marked &quot;Works offline&quot; process everything on your device — nothing is
+              uploaded at all.
+            </p>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="text-lg font-bold text-slate-900">Third-party services</h2>
             <p className="text-sm leading-7 text-slate-600">
-              Eazitool may rely on third-party services for analytics, storage, conversion, and advertising. Those providers operate under their own privacy policies and terms.
+              Eazitool may rely on third-party services for AI processing or server-side conversion. Those providers operate under their own privacy policies and terms. Tools marked as browser-based or offline process files on your device.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-lg font-bold text-slate-900">Contact</h2>
             <p className="text-sm leading-7 text-slate-600">
-              If you have questions about this policy or our ad setup, please contact the site owner through the support or issue-reporting channels on the site.
+              If you have questions about this policy or file processing, please contact the site owner through the support or issue-reporting channels on the site.
             </p>
           </section>
 

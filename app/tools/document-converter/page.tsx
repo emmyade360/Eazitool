@@ -2,7 +2,6 @@
 
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useLanguage } from '@/components/language-context';
 import dynamic from 'next/dynamic';
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 import { submitReview } from '@/lib/supabase';
@@ -26,102 +25,23 @@ const DEFAULT_MAX_UPLOAD_MB = 4;
 const MAX_UPLOAD_MB = Number.parseFloat(process.env.NEXT_PUBLIC_DOCUMENT_CONVERTER_MAX_MB ?? '') || DEFAULT_MAX_UPLOAD_MB;
 const MAX_UPLOAD_BYTES = Math.floor(MAX_UPLOAD_MB * 1024 * 1024);
 
-const PAGE_COPY = {
-  en: {
-    title: 'Document Converter',
-    subtitle: 'Convert PDF, DOCX, and TXT files online in a few clicks.',
-    from: 'From',
-    to: 'To',
-    upload: 'Upload your file',
-    accepted: 'PDF, DOCX, and TXT files are supported',
-    change: 'Click to change',
-    button: 'Convert file',
-    loading: 'Converting...',
-    preview: 'Selected conversion',
-    done: 'Your converted document is downloading.',
-    safeLimit: `Safe upload limit: ${MAX_UPLOAD_MB} MB per file.`,
-    acceptedWithLimit: `PDF, DOCX, and TXT files are supported up to ${MAX_UPLOAD_MB} MB.`,
-  },
-  fr: {
-    title: 'Convertisseur de documents',
-    subtitle: 'Convertissez des fichiers PDF, DOCX et TXT en quelques clics.',
-    from: 'Depuis',
-    to: 'Vers',
-    upload: 'Importez votre fichier',
-    accepted: 'Les fichiers PDF, DOCX et TXT sont pris en charge',
-    change: 'Cliquez pour changer',
-    button: 'Convertir le fichier',
-    loading: 'Conversion...',
-    preview: 'Conversion selectionnee',
-    done: 'Votre document converti est en cours de telechargement.',
-    safeLimit: `Limite de televersement sure : ${MAX_UPLOAD_MB} MB par fichier.`,
-    acceptedWithLimit: `Fichiers PDF, DOCX et TXT pris en charge jusqu'a ${MAX_UPLOAD_MB} MB.`,
-  },
-  es: {
-    title: 'Convertidor de documentos',
-    subtitle: 'Convierte archivos PDF, DOCX y TXT online en pocos clics.',
-    from: 'Desde',
-    to: 'Hacia',
-    upload: 'Sube tu archivo',
-    accepted: 'Se admiten archivos PDF, DOCX y TXT',
-    change: 'Haz clic para cambiar',
-    button: 'Convertir archivo',
-    loading: 'Convirtiendo...',
-    preview: 'Conversion seleccionada',
-    done: 'Tu documento convertido se esta descargando.',
-    safeLimit: `Limite de carga segura: ${MAX_UPLOAD_MB} MB por archivo.`,
-    acceptedWithLimit: `Se admiten archivos PDF, DOCX y TXT de hasta ${MAX_UPLOAD_MB} MB.`,
-  },
-  pt: {
-    title: 'Conversor de documentos',
-    subtitle: 'Converta ficheiros PDF, DOCX e TXT online em poucos cliques.',
-    from: 'De',
-    to: 'Para',
-    upload: 'Carregue o seu ficheiro',
-    accepted: 'Ficheiros PDF, DOCX e TXT sao suportados',
-    change: 'Clique para alterar',
-    button: 'Converter ficheiro',
-    loading: 'A converter...',
-    preview: 'Conversao selecionada',
-    done: 'O seu documento convertido esta a transferir.',
-    safeLimit: `Limite seguro de carregamento: ${MAX_UPLOAD_MB} MB por ficheiro.`,
-    acceptedWithLimit: `Ficheiros PDF, DOCX e TXT suportados ate ${MAX_UPLOAD_MB} MB.`,
-  },
-  ar: {
-    title: 'Document Converter',
-    subtitle: 'Convert PDF, DOCX, and TXT files online in a few clicks.',
-    from: 'From',
-    to: 'To',
-    upload: 'Upload your file',
-    accepted: 'PDF, DOCX, and TXT files are supported',
-    change: 'Click to change',
-    button: 'Convert file',
-    loading: 'Converting...',
-    preview: 'Selected conversion',
-    done: 'Your converted document is downloading.',
-    safeLimit: `Safe upload limit: ${MAX_UPLOAD_MB} MB per file.`,
-    acceptedWithLimit: `PDF, DOCX, and TXT files are supported up to ${MAX_UPLOAD_MB} MB.`,
-  },
-  sw: {
-    title: 'Kibadilishi cha hati',
-    subtitle: 'Badilisha faili za PDF, DOCX na TXT mtandaoni kwa mibofyo michache.',
-    from: 'Kutoka',
-    to: 'Kwenda',
-    upload: 'Pakia faili yako',
-    accepted: 'Faili za PDF, DOCX na TXT zinaungwa mkono',
-    change: 'Bonyeza kubadilisha',
-    button: 'Badilisha faili',
-    loading: 'Inabadilisha...',
-    preview: 'Badiliko lililochaguliwa',
-    done: 'Hati yako iliyobadilishwa inapakuliwa.',
-    safeLimit: `Kiwango salama cha kupakia: ${MAX_UPLOAD_MB} MB kwa faili.`,
-    acceptedWithLimit: `Faili za PDF, DOCX na TXT zinaungwa mkono hadi ${MAX_UPLOAD_MB} MB.`,
-  },
+const copy = {
+  title: 'Document Converter',
+  subtitle: 'Convert PDF, DOCX, and TXT files online in a few clicks.',
+  from: 'From',
+  to: 'To',
+  upload: 'Upload your file',
+  accepted: 'PDF, DOCX, and TXT files are supported',
+  change: 'Click to change',
+  button: 'Convert file',
+  loading: 'Converting...',
+  preview: 'Selected conversion',
+  done: 'Your converted document is downloading.',
+  safeLimit: `Safe upload limit: ${MAX_UPLOAD_MB} MB per file.`,
+  acceptedWithLimit: `PDF, DOCX, and TXT files are supported up to ${MAX_UPLOAD_MB} MB.`,
 } as const;
 
 function DocumentConverterInner() {
-  const { language } = useLanguage();
-  const copy = PAGE_COPY[language] ?? PAGE_COPY.en;
   const params = useSearchParams();
   const initialFrom = (params.get('from') ?? 'pdf') as Format;
   const initialTo = (params.get('to') ?? 'docx') as Format;

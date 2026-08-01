@@ -27,15 +27,17 @@ export default function ReportIssueModal({ open, onClose }: Props) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
 
-  // Reset form when modal opens
-  useEffect(() => {
+  // Reset the form when the modal transitions to open, without an effect.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setIssueType('');
       setDescription('');
       setEmail('');
       setStatus('idle');
     }
-  }, [open]);
+  }
 
   // Close on Escape
   useEffect(() => {

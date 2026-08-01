@@ -7,6 +7,14 @@ import {
   type ResumeDocument,
   type ResumeSection,
 } from '@/lib/cv-document';
+import {
+  BODY_LIMITS,
+  RATE_LIMITS,
+  checkRateLimit,
+  exceedsBodyLimit,
+  payloadTooLarge,
+  tooManyRequests,
+} from '@/lib/rate-limit';
 
 type ExportPayload = {
   content: string;
@@ -525,6 +533,15 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
 }
 
 export async function POST(req: NextRequest) {
+
+  if (exceedsBodyLimit(req, BODY_LIMITS.cv)) {
+    return payloadTooLarge('Upload is too large.');
+  }
+
+  const rateLimit = checkRateLimit(req, RATE_LIMITS.cv);
+  if (!rateLimit.ok) {
+    return tooManyRequests(rateLimit.retryAfterSec, 'Too many exports. Try again in a few minutes.');
+  }
   try {
     const payload = (await req.json()) as ExportPayload;
 

@@ -1,11 +1,30 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useLanguage } from '@/components/language-context';
-import { IMAGE_UPSCALER_COPY } from '@/lib/i18n';
 import dynamic from 'next/dynamic';
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 import { submitReview } from '@/lib/supabase';
+
+const copy = {
+  title: "Image Enlarger",
+  subtitle: "Enlarge images up to 4x with high-quality resampling — not generative AI.",
+  scaleFactor: "Scale Factor",
+  outputFormat: "Output Format",
+  quality: "Quality",
+  smallest: "10% - smallest file",
+  bestQuality: "100% - best quality",
+  dropTitle: "Drop your image here",
+  dropHint: "JPEG, PNG, WebP, AVIF, TIFF, HEIF accepted",
+  clickToChange: "Click to change",
+  preview: "Preview",
+  previewPlaceholder: "Upload an image to preview",
+  original: "Original",
+  output: "Output",
+  done: "Done! Your upscaled image is downloading.",
+  loading: "Upscaling...",
+  button: "Enlarge",
+} as const;
+
 
 const SCALES = [2, 3, 4] as const;
 type Scale = typeof SCALES[number];
@@ -45,8 +64,6 @@ interface ImageMeta {
 }
 
 export default function ImageUpscalerPage() {
-  const { language } = useLanguage();
-  const copy = IMAGE_UPSCALER_COPY[language] ?? IMAGE_UPSCALER_COPY.en;
   const [scale, setScale] = useState<Scale>(2);
   const [format, setFormat] = useState<OutputFmt>('png');
   const [quality, setQuality] = useState(90);

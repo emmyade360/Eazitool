@@ -1,30 +1,14 @@
 import type { ReactNode } from "react";
-import { buildMetadata } from "@/app/seo";
-import AdSenseUnit from "@/components/AdSenseUnit";
+import { toolMetadata } from "@/lib/tools/registry";
+import { ToolSeoSections } from "@/components/tool-seo-sections";
 
-export const metadata = buildMetadata({
-  title: "Free PDF to DOCX Converter Online | Document Converter | Eazitool",
-  description: "Convert PDF to DOCX, DOCX to PDF, PDF to TXT instantly. 100% free, no signup required. Fast document conversion tool for job applications and workflows.",
-  path: "/tools/document-converter",
-  keywords: [
-    "free PDF to DOCX converter",
-    "PDF to Word",
-    "DOCX to PDF",
-    "convert PDF to editable document",
-    "PDF to TXT converter",
-    "document conversion online",
-  ],
-});
+export const metadata = toolMetadata("document-converter");
 
-export default function DocumentConverterLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function DocumentConverterLayout({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      <AdSenseUnit className="py-8" />
+      <ToolSeoSections toolId="document-converter" />
     </>
   );
 }

@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
+import {
+  BODY_LIMITS,
+  RATE_LIMITS,
+  checkRateLimit,
+  exceedsBodyLimit,
+  payloadTooLarge,
+  tooManyRequests,
+} from '@/lib/rate-limit';
 
 const MIME: Record<string, string> = {
   jpeg: 'image/jpeg',
@@ -30,6 +38,15 @@ function sanitizeFilename(filename: string): string {
 }
 
 export async function POST(req: NextRequest) {
+
+  if (exceedsBodyLimit(req, BODY_LIMITS.media)) {
+    return payloadTooLarge('Upload is too large.');
+  }
+
+  const rateLimit = checkRateLimit(req, RATE_LIMITS.media);
+  if (!rateLimit.ok) {
+    return tooManyRequests(rateLimit.retryAfterSec, 'Too many images processed. Try again shortly.');
+  }
   try {
     const form    = await req.formData();
     const file    = form.get('file')    as File | null;

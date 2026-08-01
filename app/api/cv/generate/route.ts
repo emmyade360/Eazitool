@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import {
+  BODY_LIMITS,
+  RATE_LIMITS,
+  checkRateLimit,
+  exceedsBodyLimit,
+  payloadTooLarge,
+  tooManyRequests,
+} from '@/lib/rate-limit';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+let groqClient: Groq | null = null;
+function getGroq(): Groq {
+  if (!groqClient) groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return groqClient;
+}
 
 interface CVPayload {
   name: string;
@@ -119,13 +131,22 @@ Write the complete CV now:`;
 }
 
 export async function POST(req: NextRequest) {
+
+  if (exceedsBodyLimit(req, BODY_LIMITS.cv)) {
+    return payloadTooLarge('Upload is too large.');
+  }
+
+  const rateLimit = checkRateLimit(req, RATE_LIMITS.cv);
+  if (!rateLimit.ok) {
+    return tooManyRequests(rateLimit.retryAfterSec, 'Too many requests. Try again in a few minutes.');
+  }
   try {
     const payload = (await req.json()) as CVPayload;
     const styles: Array<'classic' | 'impact' | 'story'> = ['classic', 'impact', 'story'];
 
     const results = await Promise.all(
       styles.map((style) =>
-        groq.chat.completions
+        getGroq().chat.completions
           .create({
             model: 'llama-3.3-70b-versatile',
             messages: [{ role: 'user', content: buildPrompt({ ...payload, style }) }],

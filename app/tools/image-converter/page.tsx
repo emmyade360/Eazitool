@@ -2,11 +2,28 @@
 
 import { Suspense, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useLanguage } from '@/components/language-context';
-import { IMAGE_CONVERTER_COPY } from '@/lib/i18n';
 import dynamic from 'next/dynamic';
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 import { submitReview } from '@/lib/supabase';
+
+const copy = {
+  title: "Image Converter",
+  subtitle: "Convert between modern image formats in a few clicks.",
+  convertTo: "Convert To",
+  quality: "Quality",
+  smallest: "10% - smallest file",
+  bestQuality: "100% - best quality",
+  dropTitle: "Drop your image here",
+  fileAccepted: "JPEG, PNG, WebP, AVIF, GIF, TIFF, HEIF, SVG accepted",
+  clickToChange: "Click to change",
+  preview: "Preview",
+  previewPlaceholder: "Image preview will appear here",
+  previewUnavailable: "Preview not available for this format",
+  done: "Done! Your converted image is downloading.",
+  loading: "Converting...",
+  convertingTo: "converting to",
+} as const;
+
 
 const FORMATS = ['jpeg', 'png', 'webp', 'avif', 'gif', 'tiff', 'heif'] as const;
 type Fmt = typeof FORMATS[number];
@@ -46,8 +63,6 @@ const FORMAT_ACCEPT: Record<Fmt, string> = {
 const HAS_QUALITY = new Set<Fmt>(['jpeg', 'webp', 'avif', 'tiff', 'heif']);
 
 function ImageConverterInner() {
-  const { language } = useLanguage();
-  const copy = IMAGE_CONVERTER_COPY[language] ?? IMAGE_CONVERTER_COPY.en;
   const params = useSearchParams();
   const initTo = (params.get('to') ?? 'webp') as Fmt;
 

@@ -1,11 +1,44 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useLanguage } from '@/components/language-context';
-import { IMAGE_RESIZER_COPY } from '@/lib/i18n';
 import dynamic from 'next/dynamic';
+import { FileDropZone } from '@/components/tool-ui/FileDropZone';
+import { ErrorBanner, LoadingBanner, SuccessBanner } from '@/components/tool-ui/ToolStatus';
+import { useDownloadResult } from '@/lib/hooks/use-download-result';
+import { useReviewPrompt } from '@/lib/hooks/use-review-prompt';
+
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
-import { submitReview } from '@/lib/supabase';
+
+const copy = {
+  title: "Image Resizer",
+  subtitle: "Resize to exact dimensions with live preview updates.",
+  uploadTitle: "Upload an image to get started",
+  uploadHint: "JPEG, PNG, WebP, AVIF, GIF, TIFF, HEIF, SVG accepted",
+  clickToChange: "Click to change",
+  dimensions: "Dimensions",
+  percentage: "Percentage",
+  width: "Width",
+  height: "Height",
+  original: "Original",
+  fitMode: "Fit Mode",
+  outputFormat: "Output Format",
+  quality: "Quality",
+  smallest: "10% smallest file",
+  bestQuality: "100% highest quality",
+  result: "Result",
+  preview: "Preview",
+  previewPlaceholder: "Upload an image to preview",
+  target: "Target",
+  resize: "Resize Image",
+  loadingMessages: [
+    "Hold on, we are finalizing your task.",
+    "Sit tight while we finish your work.",
+    "Great, your result is almost ready.",
+  ],
+  ready: "Great, your result is ready.",
+  download: "Download Result",
+} as const;
+
 
 const OUTPUT_FORMATS = ['png', 'jpeg', 'webp', 'avif', 'tiff'] as const;
 type OutputFmt = typeof OUTPUT_FORMATS[number];
@@ -70,11 +103,6 @@ function getPreviewDrawBox(
 }
 
 export default function ImageResizerPage() {
-  const { language } = useLanguage();
-  const copy = IMAGE_RESIZER_COPY[language] ?? IMAGE_RESIZER_COPY.en;
-  const loadingMessages = copy.loadingMessages;
-  const LOADER_STEP_MS = 5000;
-  const LOADER_TOTAL_MS = loadingMessages.length * LOADER_STEP_MS;
   const [file, setFile] = useState<File | null>(null);
   const [meta, setMeta] = useState<ImageMeta | null>(null);
   const [preview, setPreview] = useState('');
@@ -87,13 +115,10 @@ export default function ImageResizerPage() {
   const [format, setFormat] = useState<OutputFmt>('png');
   const [quality, setQuality] = useState(90);
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ w: number; h: number } | null>(null);
-  const [downloadInfo, setDownloadInfo] = useState<{ url: string; name: string } | null>(null);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewDocType, setReviewDocType] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { result: downloadInfo, setResultFromBlob, clear: clearResult } = useDownloadResult();
+  const { promptReview, reviewModalProps } = useReviewPrompt();
   const aspectRef = useRef<number>(1);
 
   function readMeta(f: File, dataUrl: string) {
@@ -125,21 +150,13 @@ export default function ImageResizerPage() {
   }
 
   function handleFile(f: File) {
-    if (!VALID_INPUT.has(f.type)) {
-      setError(`"${f.name}" is not a supported image type.`);
-      return;
-    }
-
     setError('');
     setDone(null);
     setFile(f);
     setUsePercent(false);
     setResizePercent(100);
     setRenderedPreview('');
-    if (downloadInfo) {
-      URL.revokeObjectURL(downloadInfo.url);
-      setDownloadInfo(null);
-    }
+    clearResult();
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -220,27 +237,6 @@ export default function ImageResizerPage() {
     };
   }, [fit, height, meta, preview, width]);
 
-  useEffect(() => {
-    if (!loading) {
-      setLoadingStep(0);
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setLoadingStep((current) => Math.min(current + 1, loadingMessages.length - 1));
-    }, LOADER_STEP_MS);
-
-    return () => window.clearInterval(timer);
-  }, [loading, loadingMessages.length]);
-
-  useEffect(() => {
-    return () => {
-      if (downloadInfo) {
-        URL.revokeObjectURL(downloadInfo.url);
-      }
-    };
-  }, [downloadInfo]);
-
   async function resize() {
     if (!file) return;
 
@@ -257,14 +253,10 @@ export default function ImageResizerPage() {
       return;
     }
 
-    const startedAt = Date.now();
     setLoading(true);
     setError('');
     setDone(null);
-    if (downloadInfo) {
-      URL.revokeObjectURL(downloadInfo.url);
-      setDownloadInfo(null);
-    }
+    clearResult();
 
     try {
       const form = new FormData();
@@ -285,21 +277,13 @@ export default function ImageResizerPage() {
       const outHeight = Number(res.headers.get('X-Output-Height'));
 
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
       const disposition = res.headers.get('Content-Disposition') ?? '';
       const match = disposition.match(/filename="((?:\\.|[^"\\])*)"/) || disposition.match(/filename=([^;\s]+)/);
       const filename = match ? match[1] : `resized.${format}`;
 
-      const elapsed = Date.now() - startedAt;
-      const remaining = Math.max(0, LOADER_TOTAL_MS - elapsed);
-      if (remaining > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, remaining));
-      }
-
-      setDownloadInfo({ url, name: filename });
+      setResultFromBlob(blob, filename);
       setDone({ w: outWidth, h: outHeight });
-      setReviewDocType(`image-resize-${format}`);
-      setShowReviewModal(true);
+      promptReview(`image-resizer-${format}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -309,13 +293,6 @@ export default function ImageResizerPage() {
 
   const hasQuality = format === 'jpeg' || format === 'webp' || format === 'avif' || format === 'tiff';
   const activeFitDesc = FIT_OPTIONS.find((option) => option.value === fit)?.desc ?? '';
-
-  async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
-    try {
-      await submitReview({ document_type: review.documentType, rating: review.rating, comment: review.comment || undefined });
-    } catch {}
-    setShowReviewModal(false);
-  }
 
   return (
     <>
@@ -342,54 +319,21 @@ export default function ImageResizerPage() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="space-y-5">
-            <div
-              role="button"
-              tabIndex={0}
-              className="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-10 text-center cursor-pointer transition-colors hover:bg-indigo-100"
-              onClick={() => inputRef.current?.click()}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') inputRef.current?.click();
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const droppedFile = event.dataTransfer.files[0];
-                if (droppedFile) handleFile(droppedFile);
-              }}
-            >
-              <input
-                ref={inputRef}
-                id="image-file-upload"
-                name="image-file-upload"
-                type="file"
-                className="hidden"
-                aria-label="Upload image"
-                accept=".jpg,.jpeg,.png,.webp,.avif,.gif,.tiff,.tif,.heif,.heic,.svg"
-                onChange={(event) => {
-                  const chosenFile = event.target.files?.[0];
-                  if (chosenFile) handleFile(chosenFile);
-                }}
-              />
-              <svg className="w-10 h-10 mx-auto mb-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              {file ? (
-                <div>
-                  <p className="font-bold text-sm text-indigo-700">{file.name}</p>
-                  <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB - {copy.clickToChange}</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="font-semibold text-sm text-indigo-700">{copy.uploadTitle}</p>
-                  <p className="text-xs text-slate-400 mt-1">{copy.uploadHint}</p>
-                </div>
-              )}
-            </div>
+            <FileDropZone
+              accept=".jpg,.jpeg,.png,.webp,.avif,.gif,.tiff,.tif,.heif,.heic,.svg"
+              allowedTypes={VALID_INPUT}
+              title={copy.uploadTitle}
+              hint={copy.uploadHint}
+              files={file ? [file] : []}
+              onFiles={(picked) => handleFile(picked[0])}
+              onReject={(reason, rejected) =>
+                setError(
+                  reason === 'type'
+                    ? `"${rejected.name}" is not a supported image type.`
+                    : `"${rejected.name}" is too large.`
+                )
+              }
+            />
 
             {file && (
               <>
@@ -557,18 +501,10 @@ export default function ImageResizerPage() {
               </>
             )}
 
-            {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>
-            )}
+            <ErrorBanner message={error} onDismiss={() => setError('')} />
 
             {done && (
-              <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-4 text-sm text-green-700">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="font-semibold">{copy.ready}</span>
-                </div>
+              <SuccessBanner title={copy.ready}>
                 <p>{copy.result}: {done.w} x {done.h} px.</p>
                 {downloadInfo && (
                   <a
@@ -579,26 +515,10 @@ export default function ImageResizerPage() {
                     {copy.download}
                   </a>
                 )}
-              </div>
+              </SuccessBanner>
             )}
 
-            {loading && (
-              <div className="rounded-2xl bg-amber-50 border border-amber-100 px-5 py-4 text-amber-800 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-end gap-1 h-6">
-                    <span className="w-1.5 h-3 rounded-full bg-amber-500 animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-5 rounded-full bg-amber-600 animate-bounce [animation-delay:120ms]" />
-                    <span className="w-1.5 h-4 rounded-full bg-amber-500 animate-bounce [animation-delay:240ms]" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">{loadingMessages[loadingStep]}</p>
-                    <p className="text-xs text-amber-700 mt-1">
-                      {loadingStep < 2 ? 'Construction animation in progress while we prepare your file.' : 'Download link will appear as soon as the file is finalized.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {loading && <LoadingBanner messages={copy.loadingMessages} />}
 
             <button
               type="button"
@@ -662,12 +582,7 @@ export default function ImageResizerPage() {
       </div>
     </div>
 
-    <ReviewModal
-      isOpen={showReviewModal}
-      onClose={() => setShowReviewModal(false)}
-      onSubmit={handleReviewSubmit}
-      documentType={reviewDocType}
-    />
+    <ReviewModal {...reviewModalProps} />
     </>
   );
 }

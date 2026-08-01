@@ -1,4 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  BODY_LIMITS,
+  RATE_LIMITS,
+  checkRateLimit,
+  exceedsBodyLimit,
+  payloadTooLarge,
+  tooManyRequests,
+} from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -252,7 +260,7 @@ async function renderHtmlToPdfKit(
   let lineOpen = false;
   let currentAlign: 'left' | 'center' | 'right' | 'justify' = 'left';
   let listDepth = 0;
-  let olCounters: number[] = []; // stack of counters for nested <ol>
+  const olCounters: number[] = []; // stack of counters for nested <ol>
   let insideOl = false;
   let olItemIndex = 0;
 
@@ -477,6 +485,15 @@ function sanitizeFilename(filename: string): string {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+
+  if (exceedsBodyLimit(req, BODY_LIMITS.media)) {
+    return payloadTooLarge('Upload is too large.');
+  }
+
+  const rateLimit = checkRateLimit(req, RATE_LIMITS.media);
+  if (!rateLimit.ok) {
+    return tooManyRequests(rateLimit.retryAfterSec, 'Too many conversions. Try again shortly.');
+  }
   try {
     const form = await req.formData();
     const file = form.get('file') as File | null;

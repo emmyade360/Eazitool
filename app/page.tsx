@@ -1,12 +1,62 @@
-'use client';
-
 import Link from "next/link";
-import { useLanguage } from "@/components/language-context";
-import { HOME_COPY } from "@/lib/i18n";
+
+const copy = {
+  heroBadge: "Simple tools for everyday file work",
+  heroTitle: "Stop wasting hours on file tasks.",
+  heroHighlight: "Do it in seconds.",
+  heroSubtitle: "Convert, resize, compress, and transform your files with simple tools that work in your browser.",
+  primaryCta: "Start Converting Free",
+  secondaryCta: "Build ATS CV",
+  trustItems: ["No signup required", "Works offline where marked", "Download when ready"],
+  problemTitle: "The file tool you've been wishing existed",
+  problemBody: "We built Eazitool because online file tools are often slow, cluttered, and unreliable. This one is fast and focused.",
+  cards: [
+    {
+      problem: "Need to convert PDF to DOCX but do not have Adobe?",
+      solution: "Upload your PDF and get an editable DOCX in seconds.",
+      cta: "Try PDF to DOCX",
+      href: "/tools/document-converter?from=pdf&to=docx",
+    },
+    {
+      problem: "Need a larger image for a design or store listing?",
+      solution: "Upscale your image up to 4x with sharper output and less blur.",
+      cta: "Try Image Upscaler",
+      href: "/tools/image-upscaler",
+    },
+    {
+      problem: "Sending job applications and worried about ATS filters?",
+      solution: "Build cleaner ATS-ready CVs with guided AI help.",
+      cta: "Build ATS CV",
+      href: "/tools/cv-builder",
+    },
+  ],
+  withEazitool: "With Eazitool:",
+  simpleTitle: "Simple. Fast. Done.",
+  simpleBody: "Three steps to file freedom. No account needed.",
+  steps: [
+    { title: "Pick the task", desc: "Choose the file problem you want to solve." },
+    { title: "Use the right tool", desc: "Upload your file and adjust the options that matter." },
+    { title: "Download the result", desc: "Get your finished file in seconds." },
+  ],
+  featuredTitle: "Tools that actually work",
+  featuredBody: "Purpose-built tools for real everyday tasks.",
+  ctaTitle: "Ready to work faster with your files?",
+  ctaBody: "Use one clean workspace for document conversion, image editing, and ATS-friendly CV creation.",
+  ctaButton: "Get Started Free",
+  faqTitle: "Frequently Asked Questions",
+  faqBody: "Quick answers to common questions about Eazitool.",
+  footer: "Built in Nigeria for the world. Making file work effortless, one tool at a time.",
+  faqs: [
+    { question: "Is Eazitool free to use?", answer: "Yes. You can use the tools without creating an account." },
+    { question: "How do I convert PDF to DOCX?", answer: "Open the document converter, choose PDF to DOCX, upload the file, and download the converted document." },
+    { question: "Can I resize images without losing quality?", answer: "The image resizer uses high-quality resizing, while the Image Upscaler uses Lanczos resampling to enlarge images with cleaner edges. Neither can restore detail that was not in the original." },
+    { question: "Is my data safe?", answer: "Your files are processed only for the task and are not kept as a user account library." },
+    { question: "What formats are supported?", answer: "Eazitool supports common document and image formats including PDF, DOCX, TXT, PNG, JPEG, WebP, AVIF, TIFF, HEIF, GIF, and SVG." },
+  ],
+} as const;
+
 
 export default function Home() {
-  const { language } = useLanguage();
-  const copy = HOME_COPY[language] ?? HOME_COPY.en;
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -81,20 +131,6 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section className="bg-white px-4 py-8 shadow-sm sm:px-6 sm:py-12">
-        <div className="mx-auto max-w-6xl">
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-            {copy.stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-2xl font-bold text-blue-600 sm:text-3xl md:text-4xl">{stat.number}</p>
-                <p className="mt-1 text-xs text-slate-600 sm:text-sm">{stat.label}</p>
-              </div>
-            ))}
           </div>
         </div>
       </section>

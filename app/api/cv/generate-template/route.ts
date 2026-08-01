@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import {
+  BODY_LIMITS,
+  RATE_LIMITS,
+  checkRateLimit,
+  exceedsBodyLimit,
+  payloadTooLarge,
+  tooManyRequests,
+} from '@/lib/rate-limit';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+let groqClient: Groq | null = null;
+function getGroq(): Groq {
+  if (!groqClient) groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return groqClient;
+}
 
 const TEMPLATE_META: Record<string, { label: string }> = {
   harvard: { label: 'Harvard Classic' },
@@ -46,6 +58,15 @@ Output the complete HTML document with embedded CSS now:`;
 }
 
 export async function POST(req: NextRequest) {
+
+  if (exceedsBodyLimit(req, BODY_LIMITS.cv)) {
+    return payloadTooLarge('Upload is too large.');
+  }
+
+  const rateLimit = checkRateLimit(req, RATE_LIMITS.cv);
+  if (!rateLimit.ok) {
+    return tooManyRequests(rateLimit.retryAfterSec, 'Too many requests. Try again in a few minutes.');
+  }
   try {
     const { content, templateId } = await req.json();
 
@@ -53,7 +74,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing content or templateId.' }, { status: 400 });
     }
 
-    const result = await groq.chat.completions.create({
+    const result = await getGroq().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: buildPrompt(templateId, content) }],
       temperature: 0.3,

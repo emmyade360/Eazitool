@@ -12,10 +12,27 @@ import {
   improveBulletsWithAI,
   type ImprovedBullet,
 } from '@/lib/bullet-rewriter';
+import {
+  BODY_LIMITS,
+  RATE_LIMITS,
+  checkRateLimit,
+  exceedsBodyLimit,
+  payloadTooLarge,
+  tooManyRequests,
+} from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+
+  if (exceedsBodyLimit(req, BODY_LIMITS.roastCv)) {
+    return payloadTooLarge('Upload is too large.');
+  }
+
+  const rateLimit = checkRateLimit(req, RATE_LIMITS.roastCv);
+  if (!rateLimit.ok) {
+    return tooManyRequests(rateLimit.retryAfterSec, 'Too many CV reviews. Try again in a few minutes.');
+  }
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

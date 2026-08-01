@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useLanguage } from '@/components/language-context';
-import { CV_BUILDER_COPY } from '@/lib/i18n';
 import {
   CVPreviewCard,
   CV_TEMPLATE_IDS,
@@ -15,6 +13,33 @@ import {
 } from '@/components/cv-preview';
 import dynamic from 'next/dynamic';
 import { submitReview } from '@/lib/supabase';
+
+const copy = {
+  title: "ATS CV Builder",
+  subtitle: "Build cleaner ATS-ready CVs with AI-generated content and flexible templates.",
+  badge: "AI",
+  steps: ["Fill in your details", "Choose a design", "Preview and export"],
+  sectionsTitle: "CV Sections",
+  sectionsHint: "Toggle sections on or off and reorder them.",
+  personalInfo: "Personal Information",
+  activeSections: "sections active",
+  removeSection: "Remove section",
+  emptyState: "Enable sections from the left panel to get started.",
+  generating: "Generating your CV with AI...",
+  generateButton: "Generate CV",
+  chooseDesignTitle: "Choose your CV design",
+  chooseDesignBody: "Your resume copy is ready. Pick the design direction you want to use.",
+  reshuffleDesigns: "Reshuffle designs",
+  editDetails: "Edit details",
+  selectDesign: "Select this design",
+  downloadSource: "Download source text",
+  designHint: "Use reshuffle if you want more visual options without rewriting the CV content.",
+  reshuffleThisDesign: "Reshuffle this design",
+  seeAllDesigns: "See all designs",
+  previewSuffix: "preview",
+  switchDirection: "Switch to a different content direction:",
+} as const;
+
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 
 type Experience = { company: string; role: string; duration: string; bullets: string };
@@ -83,7 +108,7 @@ function createTemplateAssignments(
   return assignments;
 }
 
-function Steps({ current, labels }: { current: 1 | 2 | 3; labels: string[] }) {
+function Steps({ current, labels }: { current: 1 | 2 | 3; labels: readonly string[] }) {
   const steps = labels;
 
   return (
@@ -214,8 +239,6 @@ function TextareaField({
 }
 
 export default function CVBuilderPage() {
-  const { language } = useLanguage();
-  const copy = CV_BUILDER_COPY[language] ?? CV_BUILDER_COPY.en;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [enabledSections, setEnabledSections] = useState<SectionId[]>(
     ALL_SECTIONS.filter((section) => section.defaultOn).map((section) => section.id)

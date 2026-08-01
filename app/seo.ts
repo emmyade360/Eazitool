@@ -20,7 +20,7 @@ export const siteConfig = {
     "online productivity tools",
     "file conversion tools",
     "free PDF to Word converter",
-    "AI image upscaler",
+    "image enlarger",
     "resize image online",
     "ATS resume builder",
   ],
@@ -49,7 +49,9 @@ export function buildMetadata({
   const url = absoluteUrl(path);
 
   return {
-    title,
+    // Absolute so the root layout's "%s | Eazitool" template is not appended —
+    // these titles already carry the brand suffix.
+    title: { absolute: title },
     description,
     keywords: [...siteConfig.keywords, ...keywords],
     alternates: {
