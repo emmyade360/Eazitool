@@ -6,6 +6,7 @@ export type ToolCategoryId =
   | 'documents'
   | 'images'
   | 'career'
+  | 'legal'
   | 'business'
   | 'packs';
 

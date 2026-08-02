@@ -33,18 +33,19 @@ interface Profile {
   phone: string;
   email: string;
   bankDetails: string;
+  logoDataUrl: string;
 }
 
 let nextItemId = 1;
 const makeItem = (): ItemRow => ({ id: nextItemId++, description: '', quantity: '1', unitPrice: '' });
 
 function loadProfile(): Profile {
-  if (typeof window === 'undefined') return { name: '', address: '', phone: '', email: '', bankDetails: '' };
+  if (typeof window === 'undefined') return { name: '', address: '', phone: '', email: '', bankDetails: '', logoDataUrl: '' };
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
-    if (raw) return { name: '', address: '', phone: '', email: '', bankDetails: '', ...JSON.parse(raw) };
+    if (raw) return { name: '', address: '', phone: '', email: '', bankDetails: '', logoDataUrl: '', ...JSON.parse(raw) };
   } catch {}
-  return { name: '', address: '', phone: '', email: '', bankDetails: '' };
+  return { name: '', address: '', phone: '', email: '', bankDetails: '', logoDataUrl: '' };
 }
 
 const inputClass =
@@ -129,6 +130,7 @@ export function BusinessDocTool({ kind }: { kind: BusinessDocKind }) {
         currency,
         taxRatePct,
         notes: notes || undefined,
+        logoDataUrl: profile.logoDataUrl || undefined,
         bankDetails: kind === 'quotation' ? undefined : profile.bankDetails || undefined,
       });
       setResultFromBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${docNumber}.pdf`);
@@ -180,6 +182,31 @@ export function BusinessDocTool({ kind }: { kind: BusinessDocKind }) {
                     value={profile.phone} onChange={(e) => updateProfile({ phone: e.target.value })} className={inputClass} />
                   <input type="email" name="business-email" placeholder="Email" aria-label="Business email"
                     value={profile.email} onChange={(e) => updateProfile({ email: e.target.value })} className={inputClass} />
+                  <div>
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Logo (optional)</span>
+                    {profile.logoDataUrl ? (
+                      <div className="flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={profile.logoDataUrl} alt="Business logo" className="h-12 w-12 rounded-lg border border-slate-200 object-contain" />
+                        <button type="button" onClick={() => { updateProfile({ logoDataUrl: '' }); clearResult(); }}
+                          className="text-xs font-semibold text-slate-400 hover:text-red-500">
+                          Remove logo
+                        </button>
+                      </div>
+                    ) : (
+                      <input type="file" accept="image/png,image/jpeg" aria-label="Business logo"
+                        onChange={(event) => {
+                          const picked = event.target.files?.[0];
+                          if (!picked) return;
+                          if (picked.size > 2 * 1024 * 1024) { setError('Logo must be under 2MB.'); return; }
+                          const reader = new FileReader();
+                          reader.onload = () => { updateProfile({ logoDataUrl: String(reader.result) }); clearResult(); };
+                          reader.readAsDataURL(picked);
+                          event.target.value = '';
+                        }}
+                        className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-600" />
+                    )}
+                  </div>
                   {kind !== 'quotation' && (
                     <textarea name="bank-details" placeholder={'Bank details for payment\ne.g. GTBank — 0123456789 — Ada Ventures'}
                       aria-label="Bank details" rows={2}

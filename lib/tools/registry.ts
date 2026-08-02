@@ -30,8 +30,9 @@ export const CATEGORIES: CategoryDef[] = [
   { id: 'documents', label: 'Documents & PDF', iconPath: ICON_DOCUMENT, color: 'violet', order: 3 },
   { id: 'images', label: 'Images & Photos', iconPath: ICON_IMAGE, color: 'emerald', order: 4 },
   { id: 'career', label: 'Career & Student Tools', iconPath: ICON_CALCULATOR, color: 'blue', order: 5 },
-  { id: 'business', label: 'Business Documents', iconPath: ICON_DOCUMENT, color: 'amber', order: 6 },
-  { id: 'packs', label: 'Guided Packs', iconPath: ICON_AI, color: 'blue', order: 7 },
+  { id: 'legal', label: 'Legal & Official Documents', iconPath: ICON_SHIELD, color: 'violet', order: 6 },
+  { id: 'business', label: 'Business Documents', iconPath: ICON_DOCUMENT, color: 'amber', order: 7 },
+  { id: 'packs', label: 'Guided Packs', iconPath: ICON_AI, color: 'blue', order: 8 },
 ];
 
 export const TOOLS: ToolDef[] = [
@@ -785,6 +786,311 @@ export const TOOLS: ToolDef[] = [
         },
       ],
       relatedToolIds: ['pdf-merge', 'pdf-compress', 'document-scanner'],
+    },
+  },
+
+  // ── Revenue tier: CV tailoring, legal documents, e-sign, practice ──────────
+  {
+    id: 'cv-tailor',
+    href: '/tools/cv-tailor',
+    category: 'cv',
+    title: 'CV Tailor',
+    shortDescription: 'Match your CV to a specific job advert, with a letter and interview prep.',
+    runtime: 'hybrid',
+    badges: ['AI', 'NEW'],
+    iconPath: ICON_AI,
+    status: 'live',
+    seo: {
+      metaTitle: 'Tailor Your CV to a Job Advert Free | Keyword Match & Rewrite | Eazitool',
+      metaDescription:
+        'Paste a job advert and your CV to see which keywords you are missing, get AI-tailored suggestions, a matching application letter and likely interview questions. Free.',
+      keywords: [
+        'tailor cv to job description',
+        'cv keyword checker',
+        'match cv to job advert',
+        'ats keywords for cv',
+        'cover letter for specific job',
+        'interview questions for job advert',
+      ],
+      overview:
+        'Recruiters and ATS software compare your CV against the advert. This tool shows exactly which skills and keywords from the advert are missing from your CV — instantly, on your device — then adds AI-tailored bullet suggestions, a matching application letter draft and the interview questions this advert is likely to produce.',
+      faqs: [
+        {
+          question: 'How does the keyword match work?',
+          answer:
+            'The advert is analysed on your device for skills, qualifications and recurring terms, which are compared against your CV text. Matched and missing keywords are listed so you can close the gaps honestly — never claim skills you do not have.',
+        },
+        {
+          question: 'Should I use one CV for every application?',
+          answer:
+            'No — that is the main reason strong candidates get filtered out. Tailoring the summary and bullet emphasis to each advert dramatically improves your pass rate through automated screening.',
+        },
+      ],
+      relatedToolIds: ['cv-builder', 'roast-cv', 'cover-letter-generator'],
+    },
+  },
+  {
+    id: 'aptitude-practice',
+    href: '/tools/aptitude-practice',
+    category: 'career',
+    title: 'Aptitude Test Practice',
+    shortDescription: 'Timed CBT-style numerical, verbal and logical practice.',
+    runtime: 'client',
+    badges: ['NEW'],
+    iconPath: ICON_CALCULATOR,
+    status: 'live',
+    seo: {
+      metaTitle: 'Free Aptitude Test Practice | CBT-Style Timed Questions | Eazitool',
+      metaDescription:
+        'Practise numerical, verbal and logical reasoning under CBT-style timing, with explanations for every answer. Works offline — built for Nigerian recruitment and admission tests.',
+      keywords: [
+        'aptitude test practice nigeria',
+        'cbt practice questions',
+        'numerical reasoning practice',
+        'job aptitude test questions',
+        'dragnet test practice',
+        'gse aptitude practice',
+      ],
+      overview:
+        'Bank, oil-and-gas and graduate-scheme recruitment in Nigeria runs on timed aptitude tests. Practise the three core sections — numerical, verbal and logical reasoning — against the clock, then review a full explanation for every question. Everything runs on your device, so you can drill on the bus without burning data.',
+      faqs: [
+        {
+          question: 'Are these real past questions?',
+          answer:
+            'No — they are original questions written in the same style and difficulty range as common Nigerian recruitment tests, so you practise the skills without copyright issues.',
+        },
+        {
+          question: 'How should I use the timer?',
+          answer:
+            'Real tests allow roughly 45–60 seconds per question. Start untimed to learn the patterns, then switch to timed mode until you finish comfortably inside the limit.',
+        },
+      ],
+      relatedToolIds: ['cv-tailor', 'cgpa-calculator'],
+    },
+  },
+  {
+    id: 'sop-writer',
+    href: '/tools/sop-writer',
+    category: 'career',
+    title: 'SOP / Personal Statement Writer',
+    shortDescription: 'Draft a statement of purpose for school applications abroad.',
+    runtime: 'hybrid',
+    badges: ['AI', 'NEW'],
+    iconPath: ICON_AI,
+    status: 'live',
+    seo: {
+      metaTitle: 'SOP Writer | Statement of Purpose for Masters & Visa Applications | Eazitool',
+      metaDescription:
+        'Answer guided questions about your background and goals to get a structured statement of purpose draft, with optional AI polish. Free — built for study-abroad applications.',
+      keywords: [
+        'statement of purpose sample',
+        'sop for masters application',
+        'personal statement writer',
+        'sop format for uk universities',
+        'study abroad application nigeria',
+      ],
+      overview:
+        'Admissions offices read thousands of statements, and agents charge heavily to write them. This tool turns guided answers about your education, experience, target programme and goals into a properly structured SOP draft — instantly on your device, with an optional AI pass to tighten the language. The result is a starting draft in your own facts, not a template essay an admissions officer has read fifty times.',
+      faqs: [
+        {
+          question: 'What structure does the SOP use?',
+          answer:
+            'The standard four-part arc: your motivation and background, your academic and work preparation, why this specific programme and university, and your goals after graduating.',
+        },
+        {
+          question: 'Will universities detect that AI helped?',
+          answer:
+            'The draft is built from your real details and you should edit it into your own voice before submitting. Treat it as a first draft, not a final essay — submitting unedited AI text is both detectable and against many universities’ policies.',
+        },
+      ],
+      relatedToolIds: ['cover-letter-generator', 'passport-photo'],
+    },
+  },
+  {
+    id: 'tenancy-agreement',
+    href: '/tools/tenancy-agreement',
+    category: 'legal',
+    title: 'Tenancy Agreement Generator',
+    shortDescription: 'A properly structured tenancy agreement, ready to print and sign.',
+    runtime: 'client',
+    badges: ['NEW'],
+    iconPath: ICON_SHIELD,
+    status: 'live',
+    seo: {
+      metaTitle: 'Free Tenancy Agreement Generator | Nigerian Rental Template PDF | Eazitool',
+      metaDescription:
+        'Generate a structured tenancy agreement — parties, property, rent, duration, obligations and witnesses — as a clean PDF ready to print and sign. Free template, works offline.',
+      keywords: [
+        'tenancy agreement sample nigeria',
+        'tenancy agreement template pdf',
+        'rent agreement format',
+        'landlord tenant agreement nigeria',
+        'free tenancy agreement download',
+      ],
+      overview:
+        'Lawyers charge heavily for standard tenancy paperwork, so many rentals happen on nothing but trust. This generator produces a clearly structured agreement covering the parties, property, rent and term, obligations of both sides, and witness signature blocks — as a clean PDF you can print and sign. It is a template to review together, not legal advice; for high-value or disputed lettings, engage a lawyer.',
+      faqs: [
+        {
+          question: 'Is this agreement legally binding?',
+          answer:
+            'A written agreement signed by both parties with witnesses carries real weight, but this is a general template, not legal advice. Stamp duty registration and a lawyer’s review strengthen it further, especially for long leases.',
+        },
+        {
+          question: 'Can I edit the terms?',
+          answer:
+            'Yes — every clause section accepts your own wording, and you should adjust rent review, notice periods and obligations to what both parties actually agreed.',
+        },
+      ],
+      relatedToolIds: ['affidavit-generator', 'employment-letter'],
+    },
+  },
+  {
+    id: 'affidavit-generator',
+    href: '/tools/affidavit-generator',
+    category: 'legal',
+    title: 'Affidavit Generator',
+    shortDescription: 'Name change, age declaration and loss-of-document affidavits.',
+    runtime: 'client',
+    badges: ['NEW'],
+    iconPath: ICON_SHIELD,
+    status: 'live',
+    seo: {
+      metaTitle: 'Affidavit Generator | Name Change, Age Declaration, Lost Documents | Eazitool',
+      metaDescription:
+        'Generate a correctly formatted affidavit for change of name, age declaration or loss of documents, ready to take to a court registry for swearing. Free, works offline.',
+      keywords: [
+        'affidavit of change of name nigeria',
+        'age declaration affidavit format',
+        'affidavit of loss of document',
+        'court affidavit sample',
+        'sworn affidavit template',
+      ],
+      overview:
+        'Court registry typists charge per affidavit, and a wrongly formatted one gets rejected. Choose the affidavit type — change of name, age declaration, or loss of document — fill in your details, and download a correctly structured deposition ready to take to the High Court registry or a notary for swearing. The affidavit only becomes valid once sworn before a commissioner for oaths.',
+      faqs: [
+        {
+          question: 'Is the downloaded affidavit already valid?',
+          answer:
+            'No. An affidavit must be sworn before a commissioner for oaths at a court registry (or a notary public) to have effect. This tool prepares the correctly formatted document you take there.',
+        },
+        {
+          question: 'What do I need for a change of name affidavit?',
+          answer:
+            'Your former name, new name, the reason for the change, and your address. Most institutions also ask for a newspaper publication of the change — check the specific requirement.',
+        },
+      ],
+      relatedToolIds: ['tenancy-agreement', 'employment-letter'],
+    },
+  },
+  {
+    id: 'employment-letter',
+    href: '/tools/employment-letter',
+    category: 'legal',
+    title: 'Employment Letter Generator',
+    shortDescription: 'Offer letters and employment confirmations for employers.',
+    runtime: 'client',
+    badges: ['NEW'],
+    iconPath: ICON_DOCUMENT,
+    status: 'live',
+    seo: {
+      metaTitle: 'Employment Letter Generator | Offer & Confirmation Letters | Eazitool',
+      metaDescription:
+        'Employers: generate professional offer letters and employment confirmation letters on your letterhead details, as clean PDFs. Free, works offline.',
+      keywords: [
+        'employment letter sample nigeria',
+        'offer letter template',
+        'employment confirmation letter format',
+        'appointment letter sample',
+      ],
+      overview:
+        'Small businesses hire people every day without an HR department to write the paperwork. Generate a professional offer/appointment letter or an employment confirmation letter (often requested by banks and embassies from your staff) with your business details, role, salary and terms — as a clean PDF. This tool is for employers documenting real employment; it is not a way to manufacture proof of income.',
+      faqs: [
+        {
+          question: 'Who should use this tool?',
+          answer:
+            'Employers and their managers. Banks verify employment letters by contacting the employer, so the letter must come from — and be signed by — the actual business.',
+        },
+        {
+          question: 'What should an offer letter include?',
+          answer:
+            'Role and duties, start date, salary and payment frequency, probation period, notice terms, and where the employee will work — all of which this generator prompts you for.',
+        },
+      ],
+      relatedToolIds: ['tenancy-agreement', 'invoice-generator'],
+    },
+  },
+  {
+    id: 'sign-pdf',
+    href: '/tools/sign-pdf',
+    category: 'documents',
+    title: 'Sign PDF',
+    shortDescription: 'Draw your signature and place it onto any PDF page.',
+    runtime: 'client',
+    badges: ['NEW'],
+    iconPath: ICON_DOCUMENT,
+    status: 'live',
+    seo: {
+      metaTitle: 'Sign a PDF Online Free | Add Signature Without Printing | Eazitool',
+      metaDescription:
+        'Draw your signature and place it exactly where it belongs on any PDF — no printing, scanning or subscriptions. Processed in your browser, files never uploaded.',
+      keywords: [
+        'sign pdf online free',
+        'add signature to pdf',
+        'esign document free',
+        'sign contract without printing',
+        'put signature on pdf',
+      ],
+      overview:
+        'The print–sign–scan–send ritual wastes time and produces ugly documents, while e-sign subscriptions are priced in dollars. Draw your signature once, click where it belongs on the page, resize it, and download the signed PDF — all in your browser, with the document never leaving your device.',
+      faqs: [
+        {
+          question: 'Is a drawn signature on a PDF valid?',
+          answer:
+            'For everyday business documents — contracts, agreements, approvals — parties routinely accept signed PDFs. Some processes (land registry, certain court filings) still demand wet-ink signatures, so confirm what the receiving party requires.',
+        },
+        {
+          question: 'Can I sign more than one page?',
+          answer: 'Yes — place your signature on as many pages as you need before downloading.',
+        },
+      ],
+      relatedToolIds: ['signature-maker', 'pdf-merge'],
+    },
+  },
+  {
+    id: 'flyer-maker',
+    href: '/tools/flyer-maker',
+    category: 'business',
+    title: 'Flyer Maker',
+    shortDescription: 'WhatsApp-ready flyers and price lists for your business.',
+    runtime: 'client',
+    badges: ['NEW'],
+    iconPath: ICON_IMAGE,
+    status: 'live',
+    seo: {
+      metaTitle: 'Free Flyer Maker | WhatsApp Business Flyers & Price Lists | Eazitool',
+      metaDescription:
+        'Create clean square flyers, promo announcements and price lists for WhatsApp marketing — pick a template, add your details and colours, download as an image. Free.',
+      keywords: [
+        'flyer maker for whatsapp',
+        'business flyer design free',
+        'price list maker',
+        'whatsapp status advert design',
+        'promo flyer generator',
+      ],
+      overview:
+        'Daily WhatsApp marketing is how informal businesses sell, and paying a designer for every status update adds up. Pick a layout — promo announcement, price list, or service ad — set your business name, offer and colours, add your logo, and download a sharp square image sized for WhatsApp. No design skills needed, and it works offline.',
+      faqs: [
+        {
+          question: 'What size are the flyers?',
+          answer:
+            '1080×1080 pixels — the square format that displays cleanly on WhatsApp status, Instagram and Facebook.',
+        },
+        {
+          question: 'Can I use my brand colours and logo?',
+          answer: 'Yes — set primary and accent colours and upload a logo image, and every template applies them.',
+        },
+      ],
+      relatedToolIds: ['invoice-generator', 'image-compressor'],
     },
   },
 ];

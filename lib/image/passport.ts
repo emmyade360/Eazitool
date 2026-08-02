@@ -10,10 +10,14 @@ export interface PassportPreset {
 }
 
 export const PASSPORT_PRESETS: PassportPreset[] = [
-  { id: 'icao-35x45', label: 'Standard 35×45mm', widthMm: 35, heightMm: 45, dpi: 300, note: 'ICAO standard — Nigerian & most international passports and visas.' },
-  { id: 'us-2x2', label: 'US 2×2 inch', widthMm: 50.8, heightMm: 50.8, dpi: 300, note: 'US visa and passport, and other square-format applications.' },
+  { id: 'icao-35x45', label: 'Standard 35×45mm', widthMm: 35, heightMm: 45, dpi: 300, note: 'ICAO standard — Nigerian passport, UK visa and most international applications.' },
   { id: 'square-portal', label: 'Portal square (600×600)', widthMm: 50.8, heightMm: 50.8, dpi: 300, note: 'Square white-background photo in the shape JAMB, NYSC and most portals accept.' },
+  { id: 'us-2x2', label: 'US 2×2 inch', widthMm: 50.8, heightMm: 50.8, dpi: 300, note: 'US visa, passport and green-card applications.' },
   { id: 'schengen', label: 'Schengen 35×45mm', widthMm: 35, heightMm: 45, dpi: 600, note: 'Schengen visa at higher print resolution.' },
+  { id: 'canada-50x70', label: 'Canada 50×70mm', widthMm: 50, heightMm: 70, dpi: 300, note: 'Canadian visa and permanent-residence applications.' },
+  { id: 'uk-online', label: 'UK digital (35×45mm)', widthMm: 35, heightMm: 45, dpi: 600, note: 'UK online passport and visa submissions needing a high-resolution file.' },
+  { id: 'india-oci', label: 'India / OCI 51×51mm', widthMm: 51, heightMm: 51, dpi: 300, note: 'Indian visa and OCI card applications.' },
+  { id: 'china-33x48', label: 'China 33×48mm', widthMm: 33, heightMm: 48, dpi: 354, note: 'Chinese visa applications.' },
 ];
 
 export function presetPixels(preset: PassportPreset): { width: number; height: number } {

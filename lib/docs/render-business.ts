@@ -74,6 +74,23 @@ export async function renderBusinessPdf(doc: BusinessDocument): Promise<Uint8Arr
   const copy = DOC_KIND_COPY[doc.kind];
 
   // ── Header ──────────────────────────────────────────────────────────────
+  if (doc.logoDataUrl) {
+    try {
+      const base64 = doc.logoDataUrl.split(',')[1] ?? '';
+      const raw = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const logo = doc.logoDataUrl.startsWith('data:image/png')
+        ? await pdf.embedPng(raw)
+        : await pdf.embedJpg(raw);
+      const logoHeight = 46;
+      const logoWidth = (logo.width / logo.height) * logoHeight;
+      page.drawImage(logo, { x: MARGIN, y: y - logoHeight + 20, width: logoWidth, height: logoHeight });
+      // Title sits below the logo when one is present.
+      y -= logoHeight + 8;
+    } catch {
+      // An unreadable logo must never block the document.
+    }
+  }
+
   text(copy.title, MARGIN, 26, { font: bold, color: accent });
   text(doc.from.name || 'Your Business', MARGIN, 13, { alignRight: PAGE_WIDTH - MARGIN, font: bold });
   y -= 18;

@@ -31,6 +31,8 @@ export interface BusinessDocument {
   taxRatePct: number;
   notes?: string;
   bankDetails?: string;
+  /** Data URL of the business logo, drawn in the document header. */
+  logoDataUrl?: string;
 }
 
 export type CurrencyCode = 'NGN' | 'GHS' | 'KES' | 'ZAR' | 'USD' | 'GBP' | 'EUR';
