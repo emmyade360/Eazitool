@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { spawn } from 'node:child_process';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import 'docx-preview';
+import 'jszip';
 import {
   BODY_LIMITS,
   RATE_LIMITS,
@@ -14,56 +20,53 @@ const DEFAULT_MAX_UPLOAD_MB = 4;
 const MAX_UPLOAD_MB = Number.parseFloat(process.env.DOCUMENT_CONVERTER_MAX_MB ?? '') || DEFAULT_MAX_UPLOAD_MB;
 const MAX_UPLOAD_BYTES = Math.floor(MAX_UPLOAD_MB * 1024 * 1024);
 
-type RenderedPage = { data: Buffer; width: number; height: number };
+type RenderedPage = { data: Buffer; width: number; height: number; scale: number };
 
-// ── Inline style model ───────────────────────────────────────────────────────
+const PDF_RENDER_SCALE = 2;
+const DOCX_RENDER_TIMEOUT_MS = 45_000;
+const DOCX_PREVIEW_SCRIPT = join(process.cwd(), 'node_modules/docx-preview/dist/docx-preview.min.js');
+const JSZIP_SCRIPT = join(process.cwd(), 'node_modules/jszip/dist/jszip.min.js');
+const CHROMIUM_PATHS = [
+  process.env.DOCUMENT_CONVERTER_CHROMIUM_PATH,
+  process.env.CHROMIUM_PATH,
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+].filter((path): path is string => Boolean(path));
+const LIBREOFFICE_PATHS = [
+  process.env.DOCUMENT_CONVERTER_LIBREOFFICE_PATH,
+  '/usr/bin/libreoffice',
+  '/usr/bin/soffice',
+].filter((path): path is string => Boolean(path));
 
-type InlineStyle = {
-  bold: boolean;
-  italic: boolean;
-  underline: boolean;
-  color: string;
-  fontSize: number;
-};
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-type StyleFrame = {
-  tag: string;
-  style: Partial<InlineStyle>;
-};
-
-const DEFAULT_STYLE: InlineStyle = {
-  bold: false,
-  italic: false,
-  underline: false,
-  color: '#111827',
-  fontSize: 11,
-};
-
-const HEADING_SIZES: Record<string, number> = {
-  h1: 22,
-  h2: 18,
-  h3: 16,
-  h4: 14,
-  h5: 13,
-  h6: 12,
-};
-
-// ── PDF-to-image helpers (unchanged) ────────────────────────────────────────
-
-async function pdfPagesToImages(buffer: Buffer, reverseOrder = true): Promise<RenderedPage[]> {
+async function pdfPagesToImages(buffer: Buffer): Promise<RenderedPage[]> {
   const { pdf } = await import('pdf-to-img');
   const sharp = (await import('sharp')).default;
 
-  const pageIterator = await pdf(buffer, { scale: 2.0 });
+  const pageIterator = await pdf(buffer, { scale: PDF_RENDER_SCALE });
   const pages: RenderedPage[] = [];
 
   for await (const pageBuffer of pageIterator) {
     const fixedBuffer = await sharp(pageBuffer).withIccProfile('srgb').png().toBuffer();
     const meta = await sharp(fixedBuffer).metadata();
-    pages.push({ data: fixedBuffer, width: meta.width ?? 1240, height: meta.height ?? 1754 });
+    pages.push({
+      data: fixedBuffer,
+      width: meta.width ?? 1240,
+      height: meta.height ?? 1754,
+      scale: PDF_RENDER_SCALE,
+    });
   }
 
-  return reverseOrder ? pages.reverse() : pages;
+  return pages;
 }
 
 async function parsePDFText(buffer: Buffer): Promise<string> {
@@ -92,388 +95,169 @@ async function parsePDFText(buffer: Buffer): Promise<string> {
   });
 }
 
-// ── HTML utility helpers ─────────────────────────────────────────────────────
+function createDocxPreviewHtml(documentBuffer: Buffer, jsZip: string, docxPreview: string): string {
+  const documentBase64 = documentBuffer.toString('base64');
 
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; font-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  </head>
+  <body>
+    <main id="document"></main>
+    <script>${jsZip}</script>
+    <script>${docxPreview}</script>
+    <script>
+      const source = Uint8Array.from(atob('${documentBase64}'), (character) => character.charCodeAt(0));
+      const container = document.getElementById('document');
+
+      docx.renderAsync(source.buffer, container, document.head, {
+        inWrapper: true,
+        breakPages: true,
+        ignoreLastRenderedPageBreak: false,
+        renderHeaders: true,
+        renderFooters: true,
+        renderFootnotes: true,
+        renderEndnotes: true,
+        renderChanges: true,
+        experimental: true,
+        useBase64URL: true,
+      }).then(() => {
+        const page = container.querySelector('section.docx');
+        const pageWidth = page?.style.width || '595.3pt';
+        const pageHeight = page?.style.minHeight || '841.9pt';
+        const printStyles = document.createElement('style');
+        printStyles.textContent = [
+          '@page { size: ' + pageWidth + ' ' + pageHeight + '; margin: 0; }',
+          'html, body { margin: 0; background: #fff; }',
+          '.docx-wrapper { padding: 0; background: #fff; }',
+          '.docx-wrapper > section.docx { margin: 0; box-shadow: none; }',
+          '.docx-wrapper > section.docx:not(:last-child) { break-after: page; page-break-after: always; }',
+        ].join('');
+        document.head.appendChild(printStyles);
+      }).catch((error) => {
+        document.body.innerHTML = '<pre id="conversion-error">' + String(error) + '</pre>';
+      });
+    </script>
+  </body>
+</html>`;
 }
 
-function stripTags(html: string): string {
-  return decodeHtmlEntities(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-}
-
-function normalizeWhitespace(text: string, lineOpen: boolean): string {
-  const n = decodeHtmlEntities(text).replace(/\s+/g, ' ');
-  return lineOpen ? n : n.trimStart();
-}
-
-function normalizeColor(value?: string): string | undefined {
-  if (!value) return undefined;
-  const color = value.trim().replace(/^['"]|['"]$/g, '');
-  if (!color) return undefined;
-  if (/^[0-9a-f]{6}$/i.test(color)) return `#${color.toUpperCase()}`;
-  if (/^#[0-9a-f]{6}$/i.test(color)) return color.toUpperCase();
-  if (/^#[0-9a-f]{3}$/i.test(color)) {
-    const [, r, g, b] = color;
-    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+async function findExecutable(candidates: string[]): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) return candidate;
   }
-  const m = color.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
-  if (m) {
-    return `#${m.slice(1).map((p) => Math.max(0, Math.min(255, parseInt(p, 10))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
-  }
-  return color;
+  return undefined;
 }
 
-function extractInlineColor(attributes: string): string | undefined {
-  const styleMatch = attributes.match(/style\s*=\s*["']([^"']+)["']/i);
-  if (styleMatch) {
-    const c = normalizeColor(styleMatch[1].match(/(?:^|;)\s*color\s*:\s*([^;]+)/i)?.[1]);
-    if (c) return c;
-  }
-  return normalizeColor(attributes.match(/color\s*=\s*["']([^"']+)["']/i)?.[1]);
-}
+async function runProcess(executable: string, args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(executable, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    let finished = false;
 
-function extractAlignment(attributes: string): string | undefined {
-  const styleMatch = attributes.match(/style\s*=\s*["']([^"']+)["']/i);
-  if (styleMatch) {
-    const m = styleMatch[1].match(/text-align\s*:\s*(left|center|right|justify)/i);
-    if (m) return m[1].toLowerCase();
-  }
-  const m = attributes.match(/align\s*=\s*["']?(left|center|right|justify)["']?/i);
-  return m?.[1]?.toLowerCase();
-}
-
-function buildFontName(style: InlineStyle): string {
-  if (style.bold && style.italic) return 'Times-BoldItalic';
-  if (style.bold) return 'Times-Bold';
-  if (style.italic) return 'Times-Italic';
-  return 'Times-Roman';
-}
-
-function mergeStyle(stack: StyleFrame[]): InlineStyle {
-  return stack.reduce<InlineStyle>((acc, frame) => ({ ...acc, ...frame.style }), { ...DEFAULT_STYLE });
-}
-
-function closeTag(stack: StyleFrame[], tag: string): void {
-  for (let i = stack.length - 1; i >= 0; i--) {
-    if (stack[i].tag === tag) { stack.splice(i, 1); return; }
-  }
-}
-
-// ── Table pre-processing ─────────────────────────────────────────────────────
-
-type ParsedTable = string[][];
-
-function parseTables(html: string): { html: string; tables: ParsedTable[] } {
-  const tables: ParsedTable[] = [];
-
-  const processed = html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
-    const rows: string[][] = [];
-    const rowMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) ?? [];
-
-    for (const rowHtml of rowMatches) {
-      const cells: string[] = [];
-      const cellMatches = rowHtml.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) ?? [];
-      for (const cellHtml of cellMatches) {
-        cells.push(stripTags(cellHtml));
-      }
-      if (cells.length > 0) rows.push(cells);
-    }
-
-    const idx = tables.length;
-    tables.push(rows);
-    return `##TABLE_${idx}##`;
-  });
-
-  return { html: processed, tables };
-}
-
-function renderTable(doc: PDFKit.PDFDocument, table: ParsedTable): void {
-  if (table.length === 0) return;
-
-  const margins = doc.page.margins as { left: number; right: number; bottom: number };
-  const pageWidth = doc.page.width - margins.left - margins.right;
-  const colCount = Math.max(...table.map((r) => r.length), 1);
-  const colWidth = pageWidth / colCount;
-  const cellPadding = 5;
-  const fontSize = 10;
-  const lineGap = 2;
-
-  doc.fontSize(fontSize).font('Times-Roman');
-
-  for (const row of table) {
-    // Calculate required row height
-    let rowHeight = 0;
-    for (let c = 0; c < colCount; c++) {
-      const cellText = row[c] ?? '';
-      const h = doc.heightOfString(cellText, { width: colWidth - cellPadding * 2, lineGap });
-      rowHeight = Math.max(rowHeight, h + cellPadding * 2);
-    }
-    rowHeight = Math.max(rowHeight, 22);
-
-    // Page break if needed
-    if (doc.y + rowHeight > doc.page.height - margins.bottom - 20) {
-      doc.addPage();
-    }
-
-    const rowY = doc.y;
-
-    for (let c = 0; c < colCount; c++) {
-      const cellText = row[c] ?? '';
-      const x = margins.left + c * colWidth;
-
-      doc.rect(x, rowY, colWidth, rowHeight).strokeColor('#BBBBBB').lineWidth(0.5).stroke();
-      doc
-        .fillColor('#111827')
-        .font(c === 0 && table.indexOf(row) === 0 ? 'Times-Bold' : 'Times-Roman')
-        .fontSize(fontSize)
-        .text(cellText, x + cellPadding, rowY + cellPadding, {
-          width: colWidth - cellPadding * 2,
-          lineGap,
-          continued: false,
-        });
-    }
-
-    // Advance past the row
-    doc.y = rowY + rowHeight;
-    doc.x = margins.left;
-  }
-
-  doc.moveDown(0.6);
-}
-
-// ── Core HTML → PDFKit renderer ──────────────────────────────────────────────
-
-async function renderHtmlToPdfKit(
-  doc: PDFKit.PDFDocument,
-  html: string,
-  tables: ParsedTable[],
-): Promise<void> {
-  const stack: StyleFrame[] = [];
-  let lineOpen = false;
-  let currentAlign: 'left' | 'center' | 'right' | 'justify' = 'left';
-  let listDepth = 0;
-  const olCounters: number[] = []; // stack of counters for nested <ol>
-  let insideOl = false;
-  let olItemIndex = 0;
-
-  const margins = doc.page.margins as { left: number; right: number };
-
-  const resetTextState = () => {
-    doc.fillColor(DEFAULT_STYLE.color).font(buildFontName(DEFAULT_STYLE)).fontSize(DEFAULT_STYLE.fontSize);
-  };
-
-  const flushLine = (opts: Partial<PDFKit.Mixins.TextOptions> = {}) => {
-    if (lineOpen) {
-      doc.text('', { continued: false, align: currentAlign, ...opts });
-      lineOpen = false;
-    }
-    resetTextState();
-  };
-
-  const addBlockSpacing = (amount = 0.5) => {
-    flushLine();
-    doc.moveDown(amount);
-  };
-
-  const writeText = (rawText: string, extraOpts: Partial<PDFKit.Mixins.TextOptions> = {}) => {
-    const text = normalizeWhitespace(rawText, lineOpen);
-    if (!text) return;
-
-    const style = mergeStyle(stack);
-    const opts: PDFKit.Mixins.TextOptions = {
-      continued: true,
-      lineGap: 2,
-      align: currentAlign,
-      underline: style.underline,
-      ...extraOpts,
+    const finish = (callback: () => void) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      callback();
     };
 
-    doc
-      .fillColor(style.color ?? DEFAULT_STYLE.color)
-      .font(buildFontName(style))
-      .fontSize(style.fontSize)
-      .text(text, opts);
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      finish(() => reject(new Error('Document rendering timed out.')));
+    }, DOCX_RENDER_TIMEOUT_MS);
 
-    lineOpen = true;
-  };
-
-  const tokens = html.match(/<[^>]+>|[^<]+/g) ?? [];
-
-  for (const token of tokens) {
-    // ── Plain text (may contain ##TABLE_N## markers) ──────────────────
-    if (!token.startsWith('<')) {
-      const tableMarkerRe = /##TABLE_(\d+)##/g;
-      let lastIdx = 0;
-      let m: RegExpExecArray | null;
-
-      while ((m = tableMarkerRe.exec(token)) !== null) {
-        // Render any text before the marker
-        const before = token.slice(lastIdx, m.index);
-        if (before.trim()) writeText(before);
-        lastIdx = m.index + m[0].length;
-
-        // Render the table
-        flushLine();
-        doc.moveDown(0.3);
-        const tableIdx = parseInt(m[1], 10);
-        if (tables[tableIdx]) renderTable(doc, tables[tableIdx]);
-      }
-
-      // Render any trailing text after the last marker
-      const trailing = token.slice(lastIdx);
-      if (trailing) writeText(trailing);
-      continue;
-    }
-
-    // ── Tag token ──────────────────────────────────────────────────────
-    const tagMatch = token.match(/^<\s*(\/?)([a-z0-9]+)([^>]*)\/?\s*>$/i);
-    if (!tagMatch) continue;
-
-    const [, slash, rawTag, attributes] = tagMatch;
-    const tag = rawTag.toLowerCase();
-    const isClosing = slash === '/';
-
-    // ── Closing tags ───────────────────────────────────────────────────
-    if (isClosing) {
-      if (tag === 'p' || tag === 'div') {
-        addBlockSpacing(0.45);
-        currentAlign = 'left';
-      } else if (tag === 'li') {
-        flushLine();
-      } else if (tag === 'ul') {
-        listDepth = Math.max(0, listDepth - 1);
-        if (listDepth === 0) addBlockSpacing(0.2);
-      } else if (tag === 'ol') {
-        listDepth = Math.max(0, listDepth - 1);
-        olCounters.pop();
-        insideOl = olCounters.length > 0;
-        olItemIndex = olCounters[olCounters.length - 1] ?? 0;
-        if (listDepth === 0) addBlockSpacing(0.2);
-      } else if (tag === 'blockquote') {
-        addBlockSpacing(0.4);
-      } else if (tag in HEADING_SIZES) {
-        closeTag(stack, tag);
-        addBlockSpacing(0.5);
-        currentAlign = 'left';
-        continue;
-      }
-
-      if (['strong', 'b', 'em', 'i', 'u', 's', 'span', 'font', 'sub', 'sup'].includes(tag)) {
-        closeTag(stack, tag);
-      }
-      continue;
-    }
-
-    // ── Self-closing / void tags ───────────────────────────────────────
-    if (tag === 'br') { flushLine(); continue; }
-    if (tag === 'hr') { addBlockSpacing(0.2); doc.moveTo(margins.left, doc.y).lineTo(doc.page.width - margins.right, doc.y).strokeColor('#CCCCCC').lineWidth(0.5).stroke(); doc.moveDown(0.4); continue; }
-
-    if (tag === 'img') {
-      const srcMatch = attributes.match(/src\s*=\s*["']([^"']+)["']/i);
-      if (srcMatch) {
-        const src = srcMatch[1];
-        const dataUriMatch = src.match(/^data:([^;]+);base64,(.+)$/);
-        if (dataUriMatch) {
-          try {
-            const imgBuffer = Buffer.from(dataUriMatch[2], 'base64');
-            flushLine();
-            const maxW = doc.page.width - margins.left - margins.right;
-            doc.image(imgBuffer, { fit: [maxW, 400], align: 'center' });
-            doc.moveDown(0.5);
-          } catch {
-            // skip unrenderable images
-          }
-        }
-      }
-      continue;
-    }
-
-    // ── Opening block tags ─────────────────────────────────────────────
-    if (tag === 'p' || tag === 'div') {
-      if (lineOpen) addBlockSpacing(0.2);
-      currentAlign = (extractAlignment(attributes) ?? 'left') as typeof currentAlign;
-      continue;
-    }
-
-    if (tag === 'blockquote') {
-      if (lineOpen) addBlockSpacing(0.2);
-      doc.moveDown(0.1);
-      continue;
-    }
-
-    if (tag === 'ul') {
-      flushLine();
-      listDepth++;
-      insideOl = false;
-      continue;
-    }
-
-    if (tag === 'ol') {
-      flushLine();
-      listDepth++;
-      olCounters.push(0);
-      insideOl = true;
-      continue;
-    }
-
-    if (tag === 'li') {
-      flushLine();
-      const indent = Math.max(listDepth, 1) * 16;
-
-      if (insideOl && olCounters.length > 0) {
-        olCounters[olCounters.length - 1]++;
-        olItemIndex = olCounters[olCounters.length - 1];
-        const bullet = `${olItemIndex}. `;
-        doc
-          .fillColor(DEFAULT_STYLE.color)
-          .font('Times-Roman')
-          .fontSize(DEFAULT_STYLE.fontSize)
-          .text(bullet, margins.left + indent - 14, doc.y, { continued: true, lineGap: 2, indent: 0 });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = `${stderr}${chunk.toString()}`.slice(-1_500);
+    });
+    child.on('error', (error) => finish(() => reject(error)));
+    child.on('close', (code) => {
+      if (code === 0) {
+        finish(resolve);
       } else {
-        doc
-          .fillColor(DEFAULT_STYLE.color)
-          .font('Times-Roman')
-          .fontSize(DEFAULT_STYLE.fontSize)
-          .text('• ', margins.left + indent - 14, doc.y, { continued: true, lineGap: 2 });
+        finish(() => reject(new Error(`Document renderer exited with code ${code}: ${stderr.trim()}`)));
       }
-      lineOpen = true;
-      continue;
-    }
+    });
+  });
+}
 
-    if (tag in HEADING_SIZES) {
-      if (lineOpen) addBlockSpacing(0.3);
-      else doc.moveDown(0.4);
-      currentAlign = (extractAlignment(attributes) ?? 'left') as typeof currentAlign;
-      stack.push({ tag, style: { bold: true, fontSize: HEADING_SIZES[tag], color: '#0F1F2E' } });
-      continue;
-    }
+async function renderDocxToPdf(buffer: Buffer): Promise<Buffer> {
+  const libreOffice = await findExecutable(LIBREOFFICE_PATHS);
+  if (libreOffice) {
+    const directory = await mkdtemp(join(tmpdir(), 'eazitool-libreoffice-'));
+    const sourcePath = join(directory, 'source.docx');
+    const pdfPath = join(directory, 'source.pdf');
 
-    // ── Opening inline tags ────────────────────────────────────────────
-    if (tag === 'strong' || tag === 'b') {
-      stack.push({ tag, style: { bold: true } });
-    } else if (tag === 'em' || tag === 'i') {
-      stack.push({ tag, style: { italic: true } });
-    } else if (tag === 'u') {
-      stack.push({ tag, style: { underline: true } });
-    } else if (tag === 's' || tag === 'strike' || tag === 'del') {
-      stack.push({ tag, style: {} }); // pdfkit doesn't support strikethrough natively
-    } else if (tag === 'span' || tag === 'font') {
-      const color = extractInlineColor(attributes);
-      stack.push({ tag, style: color ? { color } : {} });
-    } else if (tag === 'sub' || tag === 'sup') {
-      stack.push({ tag, style: { fontSize: DEFAULT_STYLE.fontSize * 0.75 } });
+    try {
+      await writeFile(sourcePath, buffer);
+      await runProcess(libreOffice, [
+        '--headless',
+        '--nologo',
+        '--nodefault',
+        '--nofirststartwizard',
+        '--convert-to',
+        'pdf:writer_pdf_Export',
+        '--outdir',
+        directory,
+        sourcePath,
+      ]);
+
+      if (await fileExists(pdfPath)) {
+        const pdf = await readFile(pdfPath);
+        if (pdf.byteLength > 0) return pdf;
+      }
+    } catch (error) {
+      // Chromium below is a useful fallback when an office installation cannot
+      // open a particular document.
+      console.warn('LibreOffice document rendering failed:', error);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   }
 
-  flushLine();
+  const chromium = await findExecutable(CHROMIUM_PATHS);
+  if (!chromium) {
+    throw new Error('No supported document renderer is configured for document conversion.');
+  }
+
+  if (!(await fileExists(DOCX_PREVIEW_SCRIPT)) || !(await fileExists(JSZIP_SCRIPT))) {
+    throw new Error('The document preview renderer is not installed.');
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'eazitool-docx-'));
+  const htmlPath = join(directory, 'source.html');
+  const pdfPath = join(directory, 'converted.pdf');
+
+  try {
+    const [jsZip, docxPreview] = await Promise.all([
+      readFile(JSZIP_SCRIPT, 'utf8'),
+      readFile(DOCX_PREVIEW_SCRIPT, 'utf8'),
+    ]);
+
+    await writeFile(htmlPath, createDocxPreviewHtml(buffer, jsZip, docxPreview));
+    await runProcess(chromium, [
+      '--headless',
+      '--disable-gpu',
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-default-apps',
+      '--disable-extensions',
+      '--disable-sync',
+      '--no-pdf-header-footer',
+      '--run-all-compositor-stages-before-draw',
+      `--virtual-time-budget=${DOCX_RENDER_TIMEOUT_MS - 5_000}`,
+      `--print-to-pdf=${pdfPath}`,
+      `file://${htmlPath}`,
+    ]);
+
+    const pdf = await readFile(pdfPath);
+    if (pdf.byteLength === 0) throw new Error('Document renderer produced an empty PDF.');
+    return pdf;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
 // ── Misc helpers ─────────────────────────────────────────────────────────────
@@ -533,55 +317,58 @@ export async function POST(req: NextRequest) {
     // ── PDF → DOCX ──────────────────────────────────────────────────────────
 
     if (from === 'pdf' && to === 'docx') {
-      const { AlignmentType, Document, ImageRun, Packer, Paragraph, TextRun } = await import('docx');
+      const { Document, ImageRun, Packer, Paragraph, SectionType } = await import('docx');
 
       let pages: RenderedPage[];
       try {
         pages = await pdfPagesToImages(buffer);
       } catch (pdfErr) {
-        console.warn('PDF render failed, falling back to text extraction:', (pdfErr as Error).message);
-
-        const text = await parsePDFText(buffer);
-        const lines = text.split('\n').filter((l) => l.trim());
-
-        const doc = new Document({
-          sections: [{
-            properties: {},
-            children: lines.length
-              ? lines.map((line) => new Paragraph({ children: [new TextRun({ text: line, size: 24 })] }))
-              : [new Paragraph({ children: [new TextRun('(empty document)')] })],
-          }],
-        });
-
-        const docxBuffer = await Packer.toBuffer(doc);
-        const safeName = sanitizeFilename(file.name.replace(/\.pdf$/i, '') + '.docx');
-
-        return new NextResponse(new Uint8Array(docxBuffer), {
-          headers: {
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'Content-Disposition': `attachment; filename="${safeName}"`,
-          },
-        });
+        console.error('PDF visual rendering failed:', pdfErr);
+        return NextResponse.json(
+          { error: 'This PDF could not be rendered without losing its layout. No converted file was created.' },
+          { status: 422 },
+        );
       }
 
-      const TARGET_WIDTH_PX = 794;
-      const children = pages.map((page, idx) => {
-        const scale = TARGET_WIDTH_PX / page.width;
-        return new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: idx === 0 ? 0 : 400, after: 0 },
-          children: [
-            new ImageRun({
-              data: page.data,
-              transformation: { width: Math.round(page.width * scale), height: Math.round(page.height * scale) },
-              type: 'png',
-            }),
-          ],
-        });
-      });
+      if (pages.length === 0) {
+        return NextResponse.json({ error: 'The PDF does not contain any renderable pages.' }, { status: 422 });
+      }
 
       const doc = new Document({
-        sections: [{ properties: { page: { margin: { top: 360, bottom: 360, left: 360, right: 360 } } }, children }],
+        sections: pages.map((page) => {
+          // PDF pages use 72 points per inch. DOCX page dimensions use twips
+          // (1/20 point) and image dimensions use CSS pixels (96 per inch).
+          const pageWidthPoints = page.width / page.scale;
+          const pageHeightPoints = page.height / page.scale;
+
+          return {
+            properties: {
+              type: SectionType.NEXT_PAGE,
+              page: {
+                size: {
+                  width: Math.round(pageWidthPoints * 20),
+                  height: Math.round(pageHeightPoints * 20),
+                },
+                margin: { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 },
+              },
+            },
+            children: [
+              new Paragraph({
+                spacing: { before: 0, after: 0, line: 0 },
+                children: [
+                  new ImageRun({
+                    data: page.data,
+                    transformation: {
+                      width: Math.round(pageWidthPoints * (96 / 72)),
+                      height: Math.round(pageHeightPoints * (96 / 72)),
+                    },
+                    type: 'png',
+                  }),
+                ],
+              }),
+            ],
+          };
+        }),
       });
 
       const docxBuffer = await Packer.toBuffer(doc);
@@ -612,50 +399,16 @@ export async function POST(req: NextRequest) {
     // ── DOCX → PDF ──────────────────────────────────────────────────────────
 
     if (from === 'docx' && to === 'pdf') {
-      const mammoth = await import('mammoth');
-      const PDFDocument = (await import('pdfkit')).default;
-
-      // Convert DOCX → HTML, embedding images as base64 data URIs
-      const { value: rawHtml } = await mammoth.convertToHtml(
-        { buffer },
-        {
-          convertImage: mammoth.images.imgElement(async (image) => {
-            const base64 = await image.readAsBase64String();
-            return { src: `data:${image.contentType};base64,${base64}` };
-          }),
-          styleMap: [
-            "p[style-name='Title'] => h1:fresh",
-            "p[style-name='Subtitle'] => h2:fresh",
-            "p[style-name='Heading 1'] => h1:fresh",
-            "p[style-name='Heading 2'] => h2:fresh",
-            "p[style-name='Heading 3'] => h3:fresh",
-            "p[style-name='Heading 4'] => h4:fresh",
-            "p[style-name='Heading 5'] => h5:fresh",
-            "p[style-name='Heading 6'] => h6:fresh",
-            "u => u",
-          ],
-        }
-      );
-
-      // Pre-process tables into a structured format
-      const { html, tables } = parseTables(rawHtml);
-
-      const chunks: Buffer[] = [];
-      const doc = new PDFDocument({
-        margin: 72, // 1-inch margins — standard document margin
-        autoFirstPage: true,
-        size: 'A4',
-        info: { Title: file.name.replace(/\.docx?$/i, '') },
-      });
-      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-
-      await new Promise<void>((resolve, reject) => {
-        doc.on('end', resolve);
-        doc.on('error', reject);
-        renderHtmlToPdfKit(doc, html, tables).then(() => doc.end()).catch(reject);
-      });
-
-      const pdfBuffer = Buffer.concat(chunks);
+      let pdfBuffer: Buffer;
+      try {
+        pdfBuffer = await renderDocxToPdf(buffer);
+      } catch (renderError) {
+        console.error('DOCX visual rendering failed:', renderError);
+        return NextResponse.json(
+          { error: 'This DOCX could not be rendered without losing its layout. No converted file was created.' },
+          { status: 422 },
+        );
+      }
       const safeName = sanitizeFilename(file.name.replace(/\.docx?$/i, '') + '.pdf');
 
       return new NextResponse(new Uint8Array(pdfBuffer), {

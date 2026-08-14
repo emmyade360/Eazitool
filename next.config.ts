@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     "pdfjs-dist",
     "pdf-to-img",
     "pdf2json",
+    "docx-preview",
+    "jszip",
   ],
 
   images: {
