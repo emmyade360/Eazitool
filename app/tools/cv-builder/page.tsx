@@ -15,7 +15,7 @@ import {
   HtmlTemplatePreview,
 } from '@/components/cv-preview';
 import dynamic from 'next/dynamic';
-import { submitReview } from '@/lib/supabase';
+import { submitReview } from '@/lib/reviews';
 
 const copy = {
   title: "ATS CV Builder",

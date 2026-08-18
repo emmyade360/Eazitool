@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { BeforeAfterComparison } from '@/components/BeforeAfterComparison';
-import { submitReview } from '@/lib/supabase';
+import { submitReview } from '@/lib/reviews';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 

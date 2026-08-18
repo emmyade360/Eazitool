@@ -3,7 +3,7 @@
  *
  * On serverless this is per-instance and therefore best-effort: it stops a
  * single client hammering one instance, not a distributed attack. Upgrade path
- * is a Supabase table with an atomic increment RPC.
+ * is a shared rate-limit service with an atomic increment operation.
  */
 
 export interface RateLimitRule {

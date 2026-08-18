@@ -1,28 +1,9 @@
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
 import { ADMIN_SESSION_COOKIE, hasAdminSession } from '@/lib/admin-auth';
 import { AdminLoginForm } from '@/components/admin/AdminLoginForm';
+import { getFeedbackStore } from '@/lib/feedback-store';
 
 export const dynamic = 'force-dynamic';
-
-type ReviewRow = {
-  id: string;
-  document_type: string;
-  rating: number;
-  comment: string | null;
-  user_email: string | null;
-  visitor_id: string | null;
-  created_at: string;
-};
-
-type VisitorRow = {
-  id: string;
-  ip_hash: string;
-  first_seen_at: string;
-  last_seen_at: string;
-  visit_count: number;
-  last_path: string | null;
-};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -45,37 +26,17 @@ export default async function AdminFeedbackPage() {
     );
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!supabaseUrl || !serviceKey) {
-    return <AdminMessage message="Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to load feedback." />;
+  let feedback;
+  try {
+    feedback = await getFeedbackStore();
+  } catch (error) {
+    return <AdminMessage message={`Could not load feedback: ${error instanceof Error ? error.message : 'unknown storage error'}`} />;
   }
 
-  const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-  const { data: rawReviews, error: reviewsError } = await supabase
-    .from('reviews')
-    .select('id, document_type, rating, comment, user_email, visitor_id, created_at')
-    .order('created_at', { ascending: false })
-    .limit(200);
-
-  if (reviewsError) {
-    return <AdminMessage message={`Could not load feedback: ${reviewsError.message}`} />;
-  }
-
-  const reviews = (rawReviews ?? []) as ReviewRow[];
-  const visitorIds = [...new Set(reviews.map((review) => review.visitor_id).filter((id): id is string => Boolean(id)))];
-  const { data: rawVisitors, error: visitorsError } = visitorIds.length
-    ? await supabase
-        .from('visitors')
-        .select('id, ip_hash, first_seen_at, last_seen_at, visit_count, last_path')
-        .in('id', visitorIds)
-    : { data: [], error: null };
-
-  if (visitorsError) {
-    return <AdminMessage message={`Could not load visitor activity: ${visitorsError.message}`} />;
-  }
-
-  const visitors = new Map(((rawVisitors ?? []) as VisitorRow[]).map((visitor) => [visitor.id, visitor]));
+  const reviews = [...feedback.reviews]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 200);
+  const visitors = new Map(feedback.visitors.map((visitor) => [visitor.id, visitor]));
   const averageRating = reviews.length
     ? (reviews.reduce((total, review) => total + review.rating, 0) / reviews.length).toFixed(1)
     : '—';
@@ -110,20 +71,20 @@ export default async function AdminFeedbackPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {reviews.map((review) => {
-                const visitor = review.visitor_id ? visitors.get(review.visitor_id) : undefined;
+                const visitor = visitors.get(review.visitorId);
                 return (
                   <tr key={review.id} className="align-top">
                     <td className="max-w-sm px-5 py-4">
                       <p className="font-semibold text-amber-500">{'★'.repeat(review.rating)}<span className="text-slate-200">{'★'.repeat(5 - review.rating)}</span></p>
                       <p className="mt-1 whitespace-pre-wrap leading-6">{review.comment || 'No written comment.'}</p>
-                      {review.user_email && <p className="mt-2 text-xs text-slate-500">{review.user_email}</p>}
-                      <p className="mt-2 text-xs text-slate-400">{formatDate(review.created_at)}</p>
+                      {review.userEmail && <p className="mt-2 text-xs text-slate-500">{review.userEmail}</p>}
+                      <p className="mt-2 text-xs text-slate-400">{formatDate(review.createdAt)}</p>
                     </td>
-                    <td className="px-5 py-4 font-medium text-slate-800">{review.document_type}</td>
+                    <td className="px-5 py-4 font-medium text-slate-800">{review.documentType}</td>
                     <td className="px-5 py-4 font-mono text-xs text-slate-600">
-                      {visitor ? <><p>{visitor.id}</p><p className="mt-1 text-slate-400">IP tag: {visitor.ip_hash.slice(0, 16)}</p></> : 'Not tracked'}</td>
+                      {visitor ? <><p>{visitor.id}</p><p className="mt-1 text-slate-400">IP tag: {visitor.ipHash.slice(0, 16)}</p></> : 'Not tracked'}</td>
                     <td className="px-5 py-4 text-xs leading-5 text-slate-600">
-                      {visitor ? <><p>{visitor.visit_count} page visits</p><p>{visitor.last_path || 'No page path recorded'}</p><p className="mt-1 text-slate-400">Last seen {formatDate(visitor.last_seen_at)}</p></> : '—'}
+                      {visitor ? <><p>{visitor.visitCount} page visits</p><p>{visitor.lastPath || 'No page path recorded'}</p><p className="mt-1 text-slate-400">Last seen {formatDate(visitor.lastSeenAt)}</p></> : '—'}
                     </td>
                   </tr>
                 );

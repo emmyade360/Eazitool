@@ -19,10 +19,10 @@ export function getVisitorIdentity(req: NextRequest): VisitorIdentity {
   const isNew = !cookieValue || !UUID_PATTERN.test(cookieValue);
   const id = isNew ? randomUUID() : cookieValue;
   const ip = clientKey(req);
-  const secret = process.env.VISITOR_IP_HASH_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const secret = process.env.VISITOR_IP_HASH_SECRET?.trim() || process.env.ADMIN_DASHBOARD_PASSWORD?.trim();
 
   if (!secret) {
-    throw new Error('Visitor tracking is not configured.');
+    throw new Error('Visitor tracking requires VISITOR_IP_HASH_SECRET or ADMIN_DASHBOARD_PASSWORD.');
   }
 
   return {

@@ -4,7 +4,7 @@ import { Suspense, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
-import { submitReview } from '@/lib/supabase';
+import { submitReview } from '@/lib/reviews';
 
 const FORMATS = ['pdf', 'docx', 'txt'] as const;
 type Format = typeof FORMATS[number];

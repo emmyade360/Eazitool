@@ -20,6 +20,10 @@
 # production
 /build
 
+# Runtime feedback data. The server creates this file and it must be placed on
+# persistent storage in production.
+/data/feedback.json
+
 # misc
 .DS_Store
 *.pem

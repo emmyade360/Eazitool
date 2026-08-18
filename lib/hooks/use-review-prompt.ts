@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { submitReview } from '@/lib/supabase';
+import { submitReview } from '@/lib/reviews';
 
 /**
  * Wraps the modal-open / documentType / submit triplet that every tool page

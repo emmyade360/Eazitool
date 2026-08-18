@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
-import { submitReview } from '@/lib/supabase';
+import { submitReview } from '@/lib/reviews';
 
 const copy = {
   title: "Image Enlarger",
