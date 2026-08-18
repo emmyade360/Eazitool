@@ -8,6 +8,7 @@ import {
   payloadTooLarge,
   tooManyRequests,
 } from '@/lib/rate-limit';
+import { getVisitorIdentity, VISITOR_COOKIE_NAME, visitorCookieOptions } from '@/lib/visitor-tracking';
 
 const MAX_COMMENT_CHARS = 1000;
 const MAX_EMAIL_CHARS = 254;
@@ -22,11 +23,11 @@ export async function POST(req: NextRequest) {
     return tooManyRequests(limit.retryAfterSec, 'Too many reviews submitted. Try again later.');
   }
 
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 
   if (!serviceKey || !supabaseUrl) {
-    return NextResponse.json({ error: 'Review service not configured' }, { status: 503 });
+    return NextResponse.json({ error: 'Feedback is temporarily unavailable. Please try again later.' }, { status: 503 });
   }
 
   try {
@@ -52,9 +53,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid review data' }, { status: 400 });
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false },
-    });
+    const visitor = getVisitorIdentity(req);
+    const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+    const { error: visitorError } = await supabase.from('visitors').upsert(
+      {
+        id: visitor.id,
+        ip_hash: visitor.ipHash,
+        user_agent: visitor.userAgent,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
+
+    if (visitorError) {
+      console.error('Visitor insert error:', visitorError.message);
+      return NextResponse.json({ error: 'Could not save feedback. Please try again later.' }, { status: 500 });
+    }
 
     const { error } = await supabase.from('reviews').insert([
       {
@@ -62,15 +77,20 @@ export async function POST(req: NextRequest) {
         rating,
         comment: comment?.trim().slice(0, MAX_COMMENT_CHARS) || null,
         user_email: user_email?.trim().slice(0, MAX_EMAIL_CHARS) || null,
+        visitor_id: visitor.id,
       },
     ]);
 
     if (error) {
       console.error('Review insert error:', error.message);
-      return NextResponse.json({ error: 'Failed to save review' }, { status: 500 });
+      return NextResponse.json({ error: 'Could not save feedback. Please try again later.' }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true });
+    if (visitor.isNew) {
+      response.cookies.set(VISITOR_COOKIE_NAME, visitor.id, visitorCookieOptions);
+    }
+    return response;
   } catch (err) {
     console.error('Review route error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import {
   CVPreviewCard,
-  CV_TEMPLATE_IDS,
+  CV_TEMPLATE_CATALOG,
   CV_TEMPLATE_META,
+  getCVPhotoPlacementLabel,
+  getCVTemplateTheme,
   PROFESSIONAL_TEMPLATE_META,
+  type CVTemplateCategory,
   type CVTemplateId,
   type CVVariant,
   type ProfessionalTemplateId,
@@ -29,16 +32,28 @@ const copy = {
   generateButton: "Generate CV",
   chooseDesignTitle: "Choose your CV design",
   chooseDesignBody: "Your resume copy is ready. Pick the design direction you want to use.",
-  reshuffleDesigns: "Reshuffle designs",
   editDetails: "Edit details",
-  selectDesign: "Select this design",
   downloadSource: "Download source text",
-  designHint: "Use reshuffle if you want more visual options without rewriting the CV content.",
-  reshuffleThisDesign: "Reshuffle this design",
+  designHint: "Each selected template controls the exact visual format of the generated CV.",
   seeAllDesigns: "See all designs",
+  browseTemplateLibrary: "Browse all 100 templates",
   previewSuffix: "preview",
-  switchDirection: "Switch to a different content direction:",
 } as const;
+
+const TEMPLATE_CATEGORIES: Array<CVTemplateCategory | 'All'> = [
+  'All',
+  'Minimal',
+  'Corporate',
+  'Executive',
+  'Creative',
+  'Technical',
+  'Academic',
+  'Graduate',
+  'Healthcare',
+  'Sales',
+  'Bold',
+];
+const TEMPLATES_PER_PAGE = 12;
 
 const ReviewModal = dynamic(() => import('@/components/ReviewModal'), { ssr: false });
 
@@ -61,8 +76,6 @@ type SectionId =
   | 'awards'
   | 'publications'
   | 'references';
-
-type TemplateAssignments = Record<string, CVTemplateId>;
 
 const ALL_SECTIONS: { id: SectionId; label: string; icon: string; defaultOn: boolean }[] = [
   { id: 'summary', label: 'Professional Summary', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', defaultOn: true },
@@ -87,25 +100,28 @@ const COLORS: Record<string, { badge: string; border: string; bg: string; text: 
 const emptyExp = (): Experience => ({ company: '', role: '', duration: '', bullets: '' });
 const emptyEdu = (): Education => ({ institution: '', degree: '', year: '' });
 
-function createTemplateAssignments(
-  variants: CVVariant[],
-  previous?: TemplateAssignments
-): TemplateAssignments {
-  const available = [...CV_TEMPLATE_IDS];
-  const pool = previous
-    ? [
-        ...available.filter((id) => !Object.values(previous).includes(id)),
-        ...available.filter((id) => Object.values(previous).includes(id)),
-      ]
-    : available;
+async function compressPassportPhoto(file: File): Promise<string> {
+  const imageUrl = URL.createObjectURL(file);
 
-  const assignments: TemplateAssignments = {};
-
-  variants.forEach((variant, index) => {
-    assignments[variant.style] = pool[index % pool.length];
-  });
-
-  return assignments;
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () => reject(new Error('The image could not be read.'));
+      nextImage.src = imageUrl;
+    });
+    const maxSide = 600;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Photo processing is not available in this browser.');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.86);
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
 }
 
 function Steps({ current, labels }: { current: 1 | 2 | 3; labels: readonly string[] }) {
@@ -265,19 +281,17 @@ export default function CVBuilderPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [variants, setVariants] = useState<CVVariant[]>([]);
-  const [templateAssignments, setTemplateAssignments] = useState<TemplateAssignments>({});
   const [selected, setSelected] = useState<CVVariant | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<CVTemplateId>('executive');
+  const [passportPhotoEnabled, setPassportPhotoEnabled] = useState(false);
+  const [passportPhoto, setPassportPhoto] = useState('');
+  const [templateCategory, setTemplateCategory] = useState<CVTemplateCategory | 'All'>('All');
+  const [templatePage, setTemplatePage] = useState(0);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'docx'>('pdf');
   const [exporting, setExporting] = useState(false);
   const [improvingSummary, setImprovingSummary] = useState(false);
   const [templateType, setTemplateType] = useState<'standard' | 'professional'>('standard');
-  const [professionalTemplates, setProfessionalTemplates] = useState<Array<{
-    id: ProfessionalTemplateId;
-    label: string;
-    html: string;
-  }>>([]);
-  const [generatingProfessional, setGeneratingProfessional] = useState(false);
+  const [generatingProfessionalId, setGeneratingProfessionalId] = useState<ProfessionalTemplateId | null>(null);
   const [selectedProfessionalTemplate, setSelectedProfessionalTemplate] = useState<{
     id: ProfessionalTemplateId;
     label: string;
@@ -290,9 +304,39 @@ export default function CVBuilderPage() {
     comment: '',
     documentType: '',
   });
+  const filteredTemplates = templateCategory === 'All'
+    ? CV_TEMPLATE_CATALOG
+    : CV_TEMPLATE_CATALOG.filter((template) => template.category === templateCategory);
+  const templatePageCount = Math.max(1, Math.ceil(filteredTemplates.length / TEMPLATES_PER_PAGE));
+  const visibleTemplates = filteredTemplates.slice(
+    templatePage * TEMPLATES_PER_PAGE,
+    (templatePage + 1) * TEMPLATES_PER_PAGE
+  );
 
   function setPersonalField(key: keyof typeof personal, value: string) {
     setPersonal((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handlePassportPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setError('Use a JPG or PNG passport photo.');
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      setError('Use a passport photo smaller than 6 MB.');
+      return;
+    }
+
+    try {
+      setError('');
+      setPassportPhoto(await compressPassportPhoto(file));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'The passport photo could not be processed.');
+    }
   }
 
   function toggleSection(id: SectionId) {
@@ -329,7 +373,7 @@ export default function CVBuilderPage() {
     setLoading(true);
     setVariants([]);
     setSelected(null);
-    setProfessionalTemplates([]);
+    setSelectedProfessionalTemplate(null);
 
     try {
       const has = (id: SectionId) => enabledSections.includes(id);
@@ -361,10 +405,11 @@ export default function CVBuilderPage() {
       }
 
       const nextVariants = data.variants ?? [];
-      const nextAssignments = createTemplateAssignments(nextVariants);
       setVariants(nextVariants);
-      setTemplateAssignments(nextAssignments);
-      setSelectedTemplateId(nextAssignments[nextVariants[0]?.style] ?? 'executive');
+      setSelected(nextVariants[0] ?? null);
+      setSelectedTemplateId('executive');
+      setTemplateCategory('All');
+      setTemplatePage(0);
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -373,19 +418,16 @@ export default function CVBuilderPage() {
     }
   }
 
-  function reshuffleTemplates() {
-    const nextAssignments = createTemplateAssignments(variants, templateAssignments);
-    setTemplateAssignments(nextAssignments);
-
-    if (selected) {
-      setSelectedTemplateId(nextAssignments[selected.style] ?? 'executive');
-    }
+  function chooseVariant(variant: CVVariant, templateId: CVTemplateId) {
+    setSelected(variant);
+    setSelectedTemplateId(templateId);
+    setStep(3);
   }
 
-  function chooseVariant(variant: CVVariant) {
-    setSelected(variant);
-    setSelectedTemplateId(templateAssignments[variant.style] ?? 'executive');
-    setStep(3);
+  function chooseTemplate(templateId: CVTemplateId) {
+    const contentVariant = selected ?? variants[0];
+    if (!contentVariant) return;
+    chooseVariant(contentVariant, templateId);
   }
 
   async function exportVariant(variant: CVVariant, templateId: CVTemplateId) {
@@ -400,6 +442,7 @@ export default function CVBuilderPage() {
           content: variant.content,
           templateId,
           format: exportFormat,
+          passportPhoto: passportPhotoEnabled ? passportPhoto || undefined : undefined,
           fileBaseName: `${personal.name || 'CV'}_${variant.title}_${CV_TEMPLATE_META[templateId].label}`,
         }),
       });
@@ -466,80 +509,51 @@ export default function CVBuilderPage() {
     }
   }
 
-  async function generateProfessionalTemplates() {
-    if (!personal.name.trim()) {
-      setError('Please enter your name before generating professional templates.');
+  async function generateProfessionalTemplate(templateId: ProfessionalTemplateId) {
+    const content = selected?.content ?? variants[0]?.content;
+    if (!content) {
+      setError('Generate your CV content before choosing a professional template.');
       return;
     }
 
     setError('');
-    setGeneratingProfessional(true);
-    setProfessionalTemplates([]);
+    setGeneratingProfessionalId(templateId);
 
     try {
-      const professionalIds: ProfessionalTemplateId[] = [
-        'harvard',
-        'stanford',
-        'mckinsey',
-        'google',
-        'mit',
-        'forbes',
-      ];
+      const response = await fetch('/api/cv/generate-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, templateId }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { htmlTemplate?: string; error?: string };
 
-      const results = await Promise.all(
-        professionalIds.map(async (templateId) => {
-          try {
-            const res = await fetch('/api/cv/generate-template', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                content: variants[0]?.content ?? '',
-                templateId,
-              }),
-            });
+      if (!response.ok || !data.htmlTemplate?.trim()) {
+        throw new Error(data.error ?? `Could not generate the ${PROFESSIONAL_TEMPLATE_META[templateId].label} template.`);
+      }
 
-            if (!res.ok) {
-              console.error(`Failed to generate ${templateId}`);
-              return null;
-            }
-
-            const data = await res.json();
-            return {
-              id: templateId,
-              label: templateId.charAt(0).toUpperCase() + templateId.slice(1),
-              html: data?.htmlTemplate ?? '',
-            };
-          } catch (err) {
-            console.error(`Error generating ${templateId}:`, err);
-            return null;
-          }
-        })
-      );
-
-      const validResults = results.filter((r) => r !== null);
-      setProfessionalTemplates(validResults);
+      setSelectedProfessionalTemplate({
+        id: templateId,
+        label: PROFESSIONAL_TEMPLATE_META[templateId].label,
+        html: data.htmlTemplate,
+      });
       setTemplateType('professional');
-      setStep(2);
+      setStep(3);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate professional templates');
+      setError(err instanceof Error ? err.message : 'Failed to generate the professional template.');
     } finally {
-      setGeneratingProfessional(false);
+      setGeneratingProfessionalId(null);
     }
   }
 
   async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
-    try {
-      await submitReview({
-        document_type: review.documentType,
-        rating: review.rating,
-        comment: review.comment || undefined,
-        user_email: personal.email || undefined,
-      });
-      setShowReviewModal(false);
-      setReviewData({ rating: 0, comment: '', documentType: '' });
-    } catch (err) {
-      console.error('Failed to submit review:', err);
-    }
+    await submitReview({
+      document_type: review.documentType,
+      rating: review.rating,
+      comment: review.comment || undefined,
+      user_email: personal.email || undefined,
+    });
+    setShowReviewModal(false);
+    setReviewData({ rating: 0, comment: '', documentType: '' });
   }
 
   const canGenerate = personal.name.trim() && personal.email.trim() && enabledSections.length > 0;
@@ -692,6 +706,46 @@ export default function CVBuilderPage() {
             <div className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-6">
               <h2 className="mb-1 text-xs font-bold uppercase tracking-widest text-slate-500">{copy.sectionsTitle}</h2>
               <p className="mb-4 text-xs text-slate-400">{copy.sectionsHint}</p>
+              <div className={`mb-3 rounded-xl border p-3 transition-colors ${passportPhotoEnabled ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex items-center gap-2">
+                  <svg className={`h-4 w-4 shrink-0 ${passportPhotoEnabled ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 10l4.553-1.862A1 1 0 0121 9.064v5.872a1 1 0 01-1.447.926L15 14m-7 3h5a2 2 0 002-2V7a2 2 0 00-2-2H8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-xs font-semibold ${passportPhotoEnabled ? 'text-slate-700' : 'text-slate-500'}`}>Passport photo</p>
+                    <p className="mt-0.5 text-[10px] leading-relaxed text-slate-400">Optional photo for the selected CV design.</p>
+                  </div>
+                  <Toggle
+                    on={passportPhotoEnabled}
+                    onChange={() => {
+                      const nextEnabled = !passportPhotoEnabled;
+                      setPassportPhotoEnabled(nextEnabled);
+                      if (!nextEnabled) setPassportPhoto('');
+                    }}
+                  />
+                </div>
+                {passportPhotoEnabled && (
+                  <div className="mt-3 border-t border-blue-100 pt-3">
+                    <div className="flex items-center gap-3">
+                      {passportPhoto ? (
+                        // User-provided data URLs are compressed locally and cannot use next/image optimization.
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={passportPhoto} alt="Selected passport photo" className="h-12 w-12 rounded-lg border-2 border-white object-cover shadow-sm" />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-blue-200 bg-white text-[10px] font-semibold text-slate-400">Photo</div>
+                      )}
+                      <input
+                        id="passport-photo"
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={handlePassportPhotoChange}
+                        className="block min-w-0 max-w-full text-[10px] text-slate-500 file:mr-2 file:rounded-md file:border-0 file:bg-blue-600 file:px-2 file:py-1.5 file:text-[10px] file:font-bold file:text-white hover:file:bg-blue-700"
+                      />
+                    </div>
+                    <p className="mt-2 text-[10px] leading-relaxed text-slate-400">JPG or PNG, up to 6 MB. The selected template shows its photo position; no position falls back to top-left.</p>
+                  </div>
+                )}
+              </div>
               <div className="space-y-1">
                 {ALL_SECTIONS.map((section) => {
                   const isOn = enabledSections.includes(section.id);
@@ -810,15 +864,6 @@ export default function CVBuilderPage() {
                 <p className="mt-0.5 text-sm text-slate-500">{copy.chooseDesignBody}</p>
               </div>
               <div className="flex items-center gap-2">
-                {templateType === 'standard' && (
-                  <button
-                    type="button"
-                    onClick={reshuffleTemplates}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                  >
-                    {copy.reshuffleDesigns}
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -841,12 +886,7 @@ export default function CVBuilderPage() {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => {
-                    setTemplateType(type);
-                    if (type === 'professional' && professionalTemplates.length === 0 && !generatingProfessional) {
-                      generateProfessionalTemplates();
-                    }
-                  }}
+                  onClick={() => setTemplateType(type)}
                   className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
                     templateType === type
                       ? type === 'professional'
@@ -866,104 +906,191 @@ export default function CVBuilderPage() {
             </div>
 
             {templateType === 'standard' ? (
-              <div className="grid gap-5 lg:grid-cols-3">
-                {variants.map((variant) => {
-                  const color = COLORS[variant.color as keyof typeof COLORS] ?? COLORS.blue;
-                  const templateId = templateAssignments[variant.style] ?? 'executive';
-                  const templateMeta = CV_TEMPLATE_META[templateId];
-
-                  return (
-                    <div key={variant.style} className={`flex flex-col overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all hover:shadow-lg ${color.border}`}>
-                      <div className={`border-b px-5 py-4 ${color.bg} ${color.border}`}>
-                        <div className="mb-1 flex items-center justify-between">
-                          <h3 className={`text-base font-bold ${color.text}`}>{templateMeta.label}</h3>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${color.badge}`}>{variant.title}</span>
-                        </div>
-                        <p className="text-xs leading-relaxed text-slate-500">{templateMeta.blurb}</p>
-                      </div>
-
-                      <div className="flex-1 p-5">
-                        <div className="h-[26rem] overflow-hidden rounded-[1.5rem] bg-slate-100 p-3">
-                          <div className="origin-top scale-[0.62] sm:scale-[0.68]">
-                            <div className="w-[38rem]">
-                              <CVPreviewCard variant={variant} templateId={templateId} compact />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2 px-5 pb-5">
-                        <button
-                          type="button"
-                          onClick={() => chooseVariant(variant)}
-                          className={`w-full rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${color.btn}`}
-                        >
-                          {copy.selectDesign}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div>
-                {generatingProfessional ? (
-                  <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-12">
-                    <div className="text-center">
-                      <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
-                      <p className="text-sm font-medium text-slate-600">Generating professional templates...</p>
-                      <p className="mt-1 text-xs text-slate-400">This may take a minute</p>
-                    </div>
+              <div className="space-y-8">
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{copy.browseTemplateLibrary}</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      100 original CV design presets: ATS-minimal, professional, creative, and high-impact.
+                    </p>
                   </div>
-                ) : professionalTemplates.length > 0 ? (
-                  <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-                    {professionalTemplates.map((template) => (
-                      <div key={template.id} className="flex flex-col overflow-hidden rounded-2xl border-2 border-violet-200 bg-white shadow-sm transition-all hover:shadow-lg">
-                        <div className="border-b border-violet-200 bg-violet-50 px-5 py-4">
-                          <div className="mb-1 flex items-center justify-between">
-                            <h3 className="text-base font-bold text-violet-700">{PROFESSIONAL_TEMPLATE_META[template.id as ProfessionalTemplateId]?.label ?? template.label}</h3>
-                          </div>
-                          <p className="text-xs leading-relaxed text-slate-500">
-                            {PROFESSIONAL_TEMPLATE_META[template.id as ProfessionalTemplateId]?.blurb}
-                          </p>
-                        </div>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {filteredTemplates.length} {templateCategory === 'All' ? 'templates' : `${templateCategory.toLowerCase()} templates`}
+                  </p>
+                </div>
 
-                        <div className="flex-1 p-5">
-                          <div className="h-[26rem] overflow-hidden rounded-[1.5rem] bg-slate-100 p-3">
-                            <div className="origin-top scale-[0.62] sm:scale-[0.68]">
-                              <div className="w-[38rem]">
-                                <HtmlTemplatePreview htmlTemplate={template.html} compact />
+                <div className="mt-4 flex flex-wrap gap-2" aria-label="Filter CV templates by category">
+                  {TEMPLATE_CATEGORIES.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => {
+                        setTemplateCategory(category);
+                        setTemplatePage(0);
+                      }}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        templateCategory === category
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleTemplates.map((template) => {
+                    const theme = getCVTemplateTheme(template.id);
+                    const design = template.design;
+                    const isDarkHeader = ['banner', 'diagonal'].includes(design.headerStyle);
+                    const isSidebar = ['sidebar-left', 'sidebar-right'].includes(design.bodyStyle);
+                    const isTwoColumn = design.bodyStyle === 'two-column' || design.bodyStyle === 'cards';
+                    const isTimeline = design.bodyStyle === 'timeline';
+                    const photoPosition = design.photoPlacement === 'none' ? 'top-left' : design.photoPlacement;
+                    const photoAtEnd = ['top-right', 'header-right'].includes(photoPosition);
+                    const photoInSidebar = photoPosition === 'sidebar-top';
+                    const headerBackground = design.headerStyle === 'diagonal'
+                      ? `linear-gradient(125deg, ${theme.accentColor}, ${theme.headingColor})`
+                      : isDarkHeader
+                        ? theme.accentColor
+                        : design.headerStyle === 'panel' || design.headerStyle === 'boxed'
+                          ? theme.pageBackground
+                          : theme.panelBackground;
+
+                    return (
+                      <article key={template.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white transition-shadow hover:shadow-md">
+                        <div className="p-3" style={{ backgroundColor: theme.pageBackground }}>
+                          <div className="overflow-hidden rounded-lg border shadow-sm" style={{ backgroundColor: theme.panelBackground, borderColor: theme.borderColor }}>
+                            <div
+                              className={`relative flex min-h-11 items-center gap-2 px-3 ${design.headerStyle === 'centered' ? 'justify-center text-center' : ''}`}
+                              style={{
+                                background: headerBackground,
+                                borderLeft: design.headerStyle === 'rail' ? `5px solid ${theme.accentColor}` : undefined,
+                                borderBottom: ['minimal', 'compact'].includes(design.headerStyle) ? `2px solid ${theme.borderColor}` : undefined,
+                                borderRadius: ['panel', 'boxed'].includes(design.headerStyle) ? '8px' : undefined,
+                              }}
+                            >
+                              {!photoInSidebar && (
+                                <span
+                                  className={`h-5 w-5 shrink-0 border-2 ${design.photoShape === 'circle' ? 'rounded-full' : design.photoShape === 'rounded' ? 'rounded-md' : 'rounded-sm'} ${photoAtEnd ? 'order-2 ml-auto' : ''}`}
+                                  style={{ borderColor: isDarkHeader ? '#FFFFFF' : theme.accentColor, opacity: photoPosition === 'inline' ? 0.55 : 1 }}
+                                />
+                              )}
+                              <div className={`space-y-1 ${photoAtEnd ? 'order-1' : ''}`}>
+                                <div className="h-1.5 w-16 rounded-full" style={{ backgroundColor: isDarkHeader ? '#FFFFFF' : theme.headingColor }} />
+                                <div className="h-1 w-10 rounded-full" style={{ backgroundColor: isDarkHeader ? '#FFFFFF99' : theme.mutedColor }} />
+                              </div>
+                            </div>
+                            <div className={`flex min-h-16 gap-2 p-2 ${design.bodyStyle === 'sidebar-right' ? 'flex-row-reverse' : ''}`}>
+                              {isSidebar && (
+                                <span className="w-1/4 rounded-sm" style={{ backgroundColor: theme.sidebarBackground ?? theme.accentColor }}>
+                                  {photoInSidebar && <span className={`mx-auto mt-2 block h-4 w-4 border-2 ${design.photoShape === 'circle' ? 'rounded-full' : design.photoShape === 'rounded' ? 'rounded-md' : 'rounded-sm'}`} style={{ borderColor: theme.sidebarText ?? '#FFFFFF' }} />}
+                                </span>
+                              )}
+                              <div className={`relative flex-1 ${isTwoColumn ? 'grid grid-cols-2 gap-1.5' : 'space-y-1.5'} ${isTimeline ? 'border-l-2 pl-2' : ''}`} style={isTimeline ? { borderColor: theme.accentColor } : undefined}>
+                                {[0, 1, 2].map((line) => (
+                                  <span
+                                    key={line}
+                                    className={`${isTwoColumn ? 'h-6' : 'block h-1.5'} ${design.sectionStyle === 'boxed' ? 'rounded border' : design.sectionStyle === 'pill' || design.sectionStyle === 'capsule' ? 'rounded-full' : 'rounded-sm'}`}
+                                    style={{
+                                      backgroundColor: design.sectionStyle === 'pill' || design.sectionStyle === 'capsule' ? theme.accentColor : theme.borderColor,
+                                      borderColor: theme.borderColor,
+                                      width: isTwoColumn ? undefined : line === 1 ? '78%' : '100%',
+                                    }}
+                                  />
+                                ))}
                               </div>
                             </div>
                           </div>
                         </div>
-
-                          <div className="flex flex-col gap-2 px-5 pb-5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const found = professionalTemplates.find(t => t.id === template.id);
-                                if (found) {
-                                  setSelectedProfessionalTemplate(found);
-                                  setTemplateType('professional');
-                                  setStep(3);
-                                }
-                              }}
-                              className="w-full rounded-xl bg-violet-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-violet-700"
-                            >
-                              Select Template
-                            </button>
+                        <div className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800">{template.label}</h4>
+                              <p className="mt-0.5 text-[11px] font-medium text-slate-400">{template.category} · {template.bestFor}</p>
+                            </div>
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: theme.accentColor }}>
+                              {design.headerStyle.replace('-', ' ')} · {design.bodyStyle.replace('-', ' ')}
+                            </span>
                           </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center">
-                    <div className="mx-auto mb-3 h-10 w-10 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-                    <p className="text-sm text-slate-500 font-medium">Preparing professional templates…</p>
-                    <p className="mt-1 text-xs text-slate-400">This may take a moment</p>
-                  </div>
-                )}
+                          <p className="mt-2 min-h-8 text-xs leading-relaxed text-slate-500">{template.blurb}</p>
+                          <p className="mt-2 text-[11px] font-medium text-slate-400">Passport photo: {getCVPhotoPlacementLabel(template.id)}</p>
+                          <button
+                            type="button"
+                            onClick={() => chooseTemplate(template.id)}
+                            className="mt-3 w-full rounded-lg bg-slate-900 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700"
+                          >
+                            Use this template
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setTemplatePage((current) => Math.max(0, current - 1))}
+                    disabled={templatePage === 0}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs font-medium text-slate-500">Page {templatePage + 1} of {templatePageCount}</span>
+                  <button
+                    type="button"
+                    onClick={() => setTemplatePage((current) => Math.min(templatePageCount - 1, current + 1))}
+                    disabled={templatePage >= templatePageCount - 1}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </section>
+              </div>
+            ) : (
+              <div>
+                <div className="mb-5 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-900">
+                  Select one professional direction to generate. Templates are generated one at a time, preventing the concurrent AI requests that caused the MIT and Stanford errors.
+                </div>
+                <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+                  {(Object.entries(PROFESSIONAL_TEMPLATE_META) as Array<[
+                    ProfessionalTemplateId,
+                    (typeof PROFESSIONAL_TEMPLATE_META)[ProfessionalTemplateId]
+                  ]>).map(([templateId, template]) => {
+                    const isGenerating = generatingProfessionalId === templateId;
+
+                    return (
+                      <article key={templateId} className="flex flex-col overflow-hidden rounded-2xl border-2 border-violet-200 bg-white shadow-sm transition-all hover:shadow-lg">
+                        <div className="bg-gradient-to-br from-violet-700 via-violet-600 to-indigo-500 p-5 text-white">
+                          <div className="mb-8 h-1.5 w-16 rounded-full bg-white/80" />
+                          <div className="h-3 w-3/4 rounded-full bg-white" />
+                          <div className="mt-2 h-2 w-1/2 rounded-full bg-violet-200" />
+                          <div className="mt-5 grid grid-cols-3 gap-2">
+                            <span className="h-12 rounded bg-white/15" />
+                            <span className="col-span-2 h-12 rounded bg-white/10" />
+                          </div>
+                        </div>
+                        <div className="flex flex-1 flex-col p-5">
+                          <h3 className="text-base font-bold text-violet-700">{template.label}</h3>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">{template.blurb}</p>
+                          <p className="mt-3 text-[11px] font-medium text-slate-400">Best for: {template.bestFor}</p>
+                          <button
+                            type="button"
+                            onClick={() => generateProfessionalTemplate(templateId)}
+                            disabled={generatingProfessionalId !== null}
+                            className="mt-5 w-full rounded-xl bg-violet-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isGenerating ? 'Generating preview...' : 'Generate and preview'}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -986,21 +1113,11 @@ export default function CVBuilderPage() {
                     <div>
                       <h2 className="text-xl font-bold text-slate-800">{templateMeta.label}</h2>
                       <p className="text-xs text-slate-400">{templateMeta.blurb}</p>
+                      {passportPhotoEnabled && passportPhoto && <p className="mt-1 text-xs font-medium text-slate-500">Passport photo position: {getCVPhotoPlacementLabel(selectedTemplateId)}</p>}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextAssignments = createTemplateAssignments(variants, templateAssignments);
-                        setTemplateAssignments(nextAssignments);
-                        setSelectedTemplateId(nextAssignments[selected.style] ?? 'executive');
-                      }}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                    >
-                      {copy.reshuffleThisDesign}
-                    </button>
                     <button
                       type="button"
                       onClick={() => setStep(2)}
@@ -1022,7 +1139,7 @@ export default function CVBuilderPage() {
                     <span className={`ml-2 text-xs font-semibold ${color.text}`}>{personal.name} - {templateMeta.label} {copy.previewSuffix}</span>
                   </div>
                   <div className="max-h-[75vh] overflow-y-auto bg-slate-100 p-4 sm:p-8">
-                    <CVPreviewCard variant={selected} templateId={selectedTemplateId} />
+                    <CVPreviewCard variant={selected} templateId={selectedTemplateId} passportPhoto={passportPhotoEnabled ? passportPhoto : undefined} />
                   </div>
                 </div>
 
@@ -1062,30 +1179,6 @@ export default function CVBuilderPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-xl border border-slate-200 bg-slate-100 p-4">
-                  <p className="mb-3 text-xs font-semibold text-slate-500">{copy.switchDirection}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {variants
-                      .filter((variant) => variant.style !== selected.style)
-                      .map((variant) => {
-                        const variantColor = COLORS[variant.color as keyof typeof COLORS] ?? COLORS.blue;
-
-                        return (
-                          <button
-                            key={variant.style}
-                            type="button"
-                            onClick={() => chooseVariant(variant)}
-                            className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold transition-opacity hover:opacity-80 ${variantColor.badge} ${variantColor.border}`}
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            {variant.title}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
               </div>
             );
           })()
@@ -1182,9 +1275,10 @@ export default function CVBuilderPage() {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
-                                content: variants[0]?.content ?? '',
+                                content: selected?.content ?? variants[0]?.content ?? '',
                                 templateId: 'executive',
                                 format: 'docx',
+                                passportPhoto: passportPhotoEnabled ? passportPhoto || undefined : undefined,
                                 fileBaseName: `${personal.name || 'CV'}_${selectedProfessionalTemplate.id}`,
                               }),
                             });

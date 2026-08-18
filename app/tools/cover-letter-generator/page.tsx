@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { defaultLetterBody } from '@/lib/docs/render-letter';
 import { ErrorBanner, LoadingBanner, SuccessBanner } from '@/components/tool-ui/ToolStatus';
 import { useDownloadResult } from '@/lib/hooks/use-download-result';
 import { useReviewPrompt } from '@/lib/hooks/use-review-prompt';
@@ -20,22 +19,80 @@ export default function CoverLetterGeneratorPage() {
   const [employerName, setEmployerName] = useState('');
   const [employerAddress, setEmployerAddress] = useState('');
   const [role, setRole] = useState('');
-  const [source, setSource] = useState('');
+  const [background, setBackground] = useState('');
+  const [jobPost, setJobPost] = useState('');
   const [body, setBody] = useState('');
-  const [bodyTouched, setBodyTouched] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [bodyGenerated, setBodyGenerated] = useState(false);
+  const [tailoring, setTailoring] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const { result, setResultFromBlob, clear: clearResult } = useDownloadResult();
   const { promptReview, reviewModalProps } = useReviewPrompt();
 
-  const effectiveBody = bodyTouched && body.trim() ? body : defaultLetterBody(role, source);
+  const canTailor = Boolean(
+    applicantName.trim() &&
+      (applicantEmail.trim() || applicantPhone.trim()) &&
+      role.trim() &&
+      background.trim().length >= 30 &&
+      jobPost.trim().length >= 80,
+  );
 
-  async function exportPdf() {
-    if (!applicantName.trim() || !role.trim()) {
-      setError('Enter at least your name and the position you are applying for.');
+  function clearPdfResult() {
+    clearResult();
+    setError('');
+  }
+
+  function resetTailoredLetter() {
+    clearPdfResult();
+    if (bodyGenerated) {
+      setBody('');
+      setBodyGenerated(false);
+    }
+  }
+
+  async function generateTailoredLetter() {
+    if (!canTailor) {
+      setError('Complete your details, role, background and full hiring post before tailoring the letter.');
       return;
     }
-    setLoading(true);
+
+    setTailoring(true);
+    setError('');
+    clearResult();
+    try {
+      const response = await fetch('/api/career/generate-application-letter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          applicantName,
+          applicantEmail,
+          applicantPhone,
+          employerName,
+          role,
+          background,
+          jobPost,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok || typeof payload.letter !== 'string') {
+        throw new Error(typeof payload.error === 'string' ? payload.error : 'Could not tailor your letter.');
+      }
+      setBody(payload.letter);
+      setBodyGenerated(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not tailor your letter.');
+    } finally {
+      setTailoring(false);
+    }
+  }
+
+  async function exportPdf() {
+    if (!applicantName.trim() || !role.trim() || !body.trim()) {
+      setError('Generate your tailored letter before downloading the PDF.');
+      return;
+    }
+    setExporting(true);
     setError('');
     clearResult();
     try {
@@ -49,14 +106,14 @@ export default function CoverLetterGeneratorPage() {
         employerName: employerName.trim() || 'The Hiring Manager',
         employerAddressLines: employerAddress.split('\n').filter(Boolean),
         role: role.trim(),
-        body: effectiveBody,
+        body: body.trim(),
       });
       setResultFromBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), 'application-letter.pdf');
       promptReview('cover-letter-generator');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not generate the letter.');
     } finally {
-      setLoading(false);
+      setExporting(false);
     }
   }
 
@@ -74,7 +131,7 @@ export default function CoverLetterGeneratorPage() {
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Application Letter Generator</h1>
               <p className="text-sm text-slate-500">
-                Formal Nigerian format — addresses, subject line and closing done properly.
+                Share your details and the hiring post, then get a letter tailored to that role.
               </p>
             </div>
           </div>
@@ -82,56 +139,50 @@ export default function CoverLetterGeneratorPage() {
           <div className="space-y-5">
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-700">Your Details</h2>
+                <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-700">1. Your Details</h2>
                 <div className="space-y-2.5">
-                  <input type="text" name="applicant-name" placeholder="Full name" aria-label="Your full name"
-                    value={applicantName} onChange={(e) => setApplicantName(e.target.value)} className={inputClass} />
+                  <input type="text" name="applicant-name" placeholder="Full name *" aria-label="Your full name"
+                    value={applicantName} onChange={(e) => { setApplicantName(e.target.value); resetTailoredLetter(); }} className={inputClass} />
                   <textarea name="applicant-address" placeholder={'Your address\n(one line per row)'} aria-label="Your address" rows={2}
-                    value={applicantAddress} onChange={(e) => setApplicantAddress(e.target.value)} className={inputClass} />
-                  <input type="text" name="applicant-phone" placeholder="Phone" aria-label="Your phone"
-                    value={applicantPhone} onChange={(e) => setApplicantPhone(e.target.value)} className={inputClass} />
-                  <input type="email" name="applicant-email" placeholder="Email" aria-label="Your email"
-                    value={applicantEmail} onChange={(e) => setApplicantEmail(e.target.value)} className={inputClass} />
+                    value={applicantAddress} onChange={(e) => { setApplicantAddress(e.target.value); clearPdfResult(); }} className={inputClass} />
+                  <input type="text" name="applicant-phone" placeholder="Phone (or email) *" aria-label="Your phone"
+                    value={applicantPhone} onChange={(e) => { setApplicantPhone(e.target.value); resetTailoredLetter(); }} className={inputClass} />
+                  <input type="email" name="applicant-email" placeholder="Email (or phone) *" aria-label="Your email"
+                    value={applicantEmail} onChange={(e) => { setApplicantEmail(e.target.value); resetTailoredLetter(); }} className={inputClass} />
+                  <textarea name="applicant-background" placeholder="Your relevant experience, qualifications, skills and achievements *" aria-label="Your relevant background" rows={4}
+                    value={background} onChange={(e) => { setBackground(e.target.value); resetTailoredLetter(); }} className={inputClass} />
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-700">The Role</h2>
+                <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-700">2. Role &amp; Employer</h2>
                 <div className="space-y-2.5">
-                  <input type="text" name="role" placeholder="Position, e.g. Accountant" aria-label="Position"
-                    value={role} onChange={(e) => { setRole(e.target.value); clearResult(); }} className={inputClass} />
+                  <input type="text" name="role" placeholder="Position, e.g. Accountant *" aria-label="Position"
+                    value={role} onChange={(e) => { setRole(e.target.value); resetTailoredLetter(); }} className={inputClass} />
                   <input type="text" name="employer-name" placeholder="Company / employer name" aria-label="Employer name"
-                    value={employerName} onChange={(e) => setEmployerName(e.target.value)} className={inputClass} />
+                    value={employerName} onChange={(e) => { setEmployerName(e.target.value); resetTailoredLetter(); }} className={inputClass} />
                   <textarea name="employer-address" placeholder={'Employer address\n(one line per row)'} aria-label="Employer address" rows={2}
-                    value={employerAddress} onChange={(e) => setEmployerAddress(e.target.value)} className={inputClass} />
-                  <input type="text" name="source" placeholder="Where you saw the advert (optional)" aria-label="Advert source"
-                    value={source} onChange={(e) => setSource(e.target.value)} className={inputClass} />
+                    value={employerAddress} onChange={(e) => { setEmployerAddress(e.target.value); clearPdfResult(); }} className={inputClass} />
                 </div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-bold uppercase tracking-widest text-slate-700">Letter Body</h2>
-                {bodyTouched && (
-                  <button type="button"
-                    onClick={() => { setBody(''); setBodyTouched(false); }}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-700">
-                    Reset to template
-                  </button>
-                )}
-              </div>
+              <label htmlFor="hiring-post" className="mb-2 block text-sm font-bold uppercase tracking-widest text-slate-700">
+                3. Paste the Hiring Post <span className="text-rose-400">*</span>
+              </label>
               <textarea
-                name="letter-body"
-                aria-label="Letter body"
-                rows={9}
-                value={effectiveBody}
-                onChange={(e) => { setBody(e.target.value); setBodyTouched(true); clearResult(); }}
+                id="hiring-post"
+                name="hiring-post"
+                aria-label="Hiring post"
+                rows={8}
+                value={jobPost}
+                onChange={(e) => { setJobPost(e.target.value); resetTailoredLetter(); }}
                 className={`${inputClass} leading-6`}
+                placeholder="Paste the complete job post here, including the responsibilities, requirements and preferred skills..."
               />
               <p className="mt-2 text-xs text-slate-400">
-                The template updates as you fill in the role — edit it freely to add your
-                qualifications and experience.
+                The AI uses this post to understand what the employer needs. It only uses the experience and facts you provide above.
               </p>
             </div>
 
@@ -146,11 +197,38 @@ export default function CoverLetterGeneratorPage() {
               </SuccessBanner>
             )}
 
-            {loading && <LoadingBanner messages={['Formatting your letter...']} />}
-
-            <button type="button" onClick={exportPdf} disabled={loading}
+            <button type="button" onClick={generateTailoredLetter} disabled={tailoring || exporting || !canTailor}
               className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-              {loading ? 'Generating...' : 'Download Letter as PDF'}
+              {tailoring ? 'Tailoring your letter...' : 'Generate Tailored Application Letter'}
+            </button>
+
+            {tailoring && <LoadingBanner messages={['Reading the hiring post...', 'Matching your experience to the role...', 'Writing your application letter...']} />}
+
+            {bodyGenerated && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-slate-700">Your Tailored Letter</h2>
+                  <span className="text-xs font-semibold text-blue-600">Edit before downloading</span>
+                </div>
+                <textarea
+                  name="letter-body"
+                  aria-label="Tailored letter body"
+                  rows={11}
+                  value={body}
+                  onChange={(e) => { setBody(e.target.value); clearPdfResult(); }}
+                  className={`${inputClass} leading-6`}
+                />
+                <p className="mt-2 text-xs leading-5 text-slate-400">
+                  Review every claim and personalise the wording before submitting your application.
+                </p>
+              </div>
+            )}
+
+            {exporting && <LoadingBanner messages={['Formatting your letter...']} />}
+
+            <button type="button" onClick={exportPdf} disabled={tailoring || exporting || !body.trim()}
+              className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {exporting ? 'Preparing PDF...' : 'Download Letter as PDF'}
             </button>
           </div>
         </div>

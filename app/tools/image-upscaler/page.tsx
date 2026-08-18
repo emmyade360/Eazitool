@@ -194,9 +194,7 @@ export default function ImageUpscalerPage() {
   }
 
   async function handleReviewSubmit(review: { rating: number; comment: string; documentType: string }) {
-    try {
-      await submitReview({ document_type: review.documentType, rating: review.rating, comment: review.comment || undefined });
-    } catch {}
+    await submitReview({ document_type: review.documentType, rating: review.rating, comment: review.comment || undefined });
     setShowReviewModal(false);
   }
 

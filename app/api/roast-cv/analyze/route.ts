@@ -6,7 +6,7 @@ import {
   getWordCount,
   parseCVFile,
 } from '@/lib/cv-parser';
-import { analyzeCV, createImprovedCV, matchRoleKeywords } from '@/lib/ats-scorer';
+import { analyzeCV, matchRoleKeywords } from '@/lib/ats-scorer';
 import {
   generateRoastSummary,
   improveBulletsWithAI,
@@ -78,9 +78,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const improvedText =
-      improvedBullets.length > 0 ? createImprovedCV(cleanText, improvedBullets) : cleanText;
-
     return NextResponse.json({
       success: true,
       data: {
@@ -92,7 +89,6 @@ export async function POST(req: NextRequest) {
         roleAnalysis,
         roastSummary,
         improvedBullets,
-        improvedText,
       },
     });
   } catch (error) {

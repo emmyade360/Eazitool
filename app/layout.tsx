@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MobileNav from "@/components/MobileNav";
+import VisitorTracker from "@/components/VisitorTracker";
 import { absoluteUrl, siteConfig } from "./seo";
 
 export const viewport: Viewport = {
@@ -71,6 +72,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body className="min-h-screen bg-white">
+        <VisitorTracker />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}

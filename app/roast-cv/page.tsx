@@ -53,7 +53,6 @@ type RoastResult = {
   roleAnalysis: RoleKeywordMatch;
   roastSummary: string;
   improvedBullets: ImprovedBullet[];
-  improvedText: string;
   originalText: string;
 } | null;
 
@@ -152,14 +151,47 @@ export default function RoastCVPage() {
     }
   };
 
-  const downloadImprovedCV = () => {
+  const downloadCVReport = () => {
     if (!result) return;
 
-    const blob = new Blob([result.improvedText], { type: 'text/plain;charset=utf-8' });
+    const report = [
+      'EAZITOOL CV ROAST REPORT',
+      '========================',
+      '',
+      `ATS score: ${result.atsScore.overallScore}/100`,
+      `Estimated ATS pass rate: ${result.atsScore.estimatedPassRate}%`,
+      `Pages reviewed: ${result.pages}`,
+      `Words reviewed: ${result.wordCount}`,
+      '',
+      'ROAST SUMMARY',
+      '-------------',
+      result.roastSummary,
+      '',
+      'STRENGTHS',
+      '---------',
+      ...(result.atsScore.strengths.length > 0 ? result.atsScore.strengths.map((strength) => `- ${strength}`) : ['- No strengths were identified.']),
+      '',
+      'ISSUES AND RECOMMENDATIONS',
+      '--------------------------',
+      ...(result.atsScore.issues.length > 0
+        ? result.atsScore.issues.map((issue) => `- [${issue.category.toUpperCase()}] ${issue.title}: ${issue.description}\n  Recommendation: ${issue.suggestion}`)
+        : ['- No issues were identified.']),
+      ...(result.improvedBullets.length > 0
+        ? [
+            '',
+            'SUGGESTED BULLET REWRITES',
+            '-------------------------',
+            ...result.improvedBullets.map((bullet, index) => `${index + 1}. Original: ${bullet.original}\n   Suggested: ${bullet.improved}\n   Why: ${bullet.reasoning}`),
+          ]
+        : []),
+      '',
+      'NOTE: This report does not alter your uploaded CV. Apply any suggestions manually where appropriate.',
+    ].join('\n');
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'improved-cv.txt';
+    a.download = 'cv-roast-report.txt';
     a.click();
     URL.revokeObjectURL(url);
     setShowReviewModal(true);
@@ -279,27 +311,6 @@ export default function RoastCVPage() {
               Helps us tailor feedback to your target role
             </p>
           </div>
-
-          {file && (
-            <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-bold text-slate-800">Ready to roast</p>
-                  <p className="text-xs text-slate-500">
-                    Your CV is uploaded. Tap the button below to run the ATS review and AI bullet rewrite.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={roastMyCV}
-                  disabled={isLoading}
-                  className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isLoading ? 'Analyzing CV...' : 'Start Roast'}
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Roast Button */}
           <button
@@ -504,9 +515,9 @@ export default function RoastCVPage() {
             {/* Before/After Comparison */}
             {result.improvedBullets.length > 0 && (
               <div className="rounded-2xl bg-white p-6 shadow-lg">
-                <h2 className="mb-4 text-xl font-bold text-slate-800">Before vs After: AI-Improved Bullets</h2>
+                <h2 className="mb-4 text-xl font-bold text-slate-800">Suggested Bullet Rewrites</h2>
                 <p className="mb-4 text-sm text-slate-500">
-                  Click any comparison to see the full before/after
+                  Review the suggested wording. Your uploaded CV is not changed.
                 </p>
                 
                 <div className="space-y-4">
@@ -536,10 +547,10 @@ export default function RoastCVPage() {
                 </div>
 
                 <button
-                  onClick={downloadImprovedCV}
+                  onClick={downloadCVReport}
                   className="mt-4 w-full rounded-xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700"
                 >
-                  Download Improved CV
+                  Download CV Report
                 </button>
               </div>
             )}

@@ -89,15 +89,19 @@ export function payloadTooLarge(message: string): Response {
 
 export const RATE_LIMITS = {
   reviews: { key: 'reviews', windowMs: 60 * 60 * 1000, max: 5 },
+  visits: { key: 'visits', windowMs: 10 * 60 * 1000, max: 120 },
   roastCv: { key: 'roast-cv', windowMs: 10 * 60 * 1000, max: 5 },
   cv: { key: 'cv', windowMs: 10 * 60 * 1000, max: 20 },
+  applicationLetter: { key: 'application-letter', windowMs: 10 * 60 * 1000, max: 10 },
   media: { key: 'media', windowMs: 10 * 60 * 1000, max: 30 },
   safety: { key: 'safety', windowMs: 10 * 60 * 1000, max: 10 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export const BODY_LIMITS = {
   reviews: 4 * 1024,
+  visits: 2 * 1024,
   cv: 2 * 1024 * 1024,
+  applicationLetter: 48 * 1024,
   roastCv: 10 * 1024 * 1024,
   media: 15 * 1024 * 1024,
   safety: 8 * 1024,

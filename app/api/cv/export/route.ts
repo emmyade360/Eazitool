@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  CV_TEMPLATE_META,
-  CV_TEMPLATE_THEMES,
+  getCVTemplateDesign,
+  getCVTemplateLayout,
+  getCVTemplateTheme,
   parseResumeMarkdown,
   type CVTemplateId,
   type ResumeDocument,
@@ -21,10 +22,26 @@ type ExportPayload = {
   templateId: CVTemplateId;
   format: 'pdf' | 'docx';
   fileBaseName?: string;
+  passportPhoto?: string;
 };
 
 function sanitizeFilename(value: string) {
   return value.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'CV';
+}
+
+type PassportPhoto = {
+  data: Buffer;
+  type: 'jpg' | 'png';
+};
+
+function readPassportPhoto(value: unknown): PassportPhoto | undefined {
+  if (typeof value !== 'string') return undefined;
+  const match = value.match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) return undefined;
+
+  const data = Buffer.from(match[2]!, 'base64');
+  if (data.length === 0 || data.length > 1024 * 1024) return undefined;
+  return { data, type: match[1] === 'png' ? 'png' : 'jpg' };
 }
 
 function splitSectionsForSidebar(resume: ResumeDocument) {
@@ -39,6 +56,7 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
   const {
     BorderStyle,
     Document,
+    ImageRun,
     Packer,
     Paragraph,
     ShadingType,
@@ -49,27 +67,62 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
     WidthType,
   } = await import('docx');
 
-  const theme = CV_TEMPLATE_THEMES[payload.templateId];
-  const templateMeta = CV_TEMPLATE_META[payload.templateId];
+  const theme = getCVTemplateTheme(payload.templateId);
+  const layout = getCVTemplateLayout(payload.templateId);
+  const design = getCVTemplateDesign(payload.templateId);
+  const passportPhoto = readPassportPhoto(payload.passportPhoto);
+  const usesSidebar = ['sidebar-left', 'sidebar-right'].includes(design.bodyStyle) || layout === 'sidebar';
+  const photoInSidebar = Boolean(passportPhoto) && design.photoPlacement === 'sidebar-top' && usesSidebar;
+  const darkHeader = ['banner', 'diagonal'].includes(design.headerStyle) || layout === 'contrast';
+  const headerFill = darkHeader
+    ? theme.accentColor
+    : design.headerStyle === 'panel' || design.headerStyle === 'boxed'
+      ? theme.pageBackground
+      : theme.panelBackground;
+  const documentFont = design.fontFamily === 'serif'
+    ? 'Times New Roman'
+    : design.fontFamily === 'mono'
+      ? 'Courier New'
+      : 'Arial';
+  const sectionSpacing = design.density === 'airy' ? 280 : design.density === 'compact' ? 140 : 220;
 
   const makeSectionParagraphs = (sections: ResumeSection[]) =>
     sections.flatMap((section) => {
+      const sectionStyle = design.sectionStyle;
+      const sectionTitle = sectionStyle === 'numbered'
+        ? `${String(resume.sections.indexOf(section) + 1).padStart(2, '0')}  ${section.title.toUpperCase()}`
+        : section.title.toUpperCase();
+      const boxedSection = sectionStyle === 'boxed' || sectionStyle === 'pill' || sectionStyle === 'capsule';
       const blocks = [
         new Paragraph({
-          spacing: { before: 220, after: 80 },
-          border: {
-            bottom: {
-              color: theme.borderColor.replace('#', ''),
-              style: BorderStyle.SINGLE,
-              size: 6,
-            },
-          },
+          spacing: { before: sectionSpacing, after: 80 },
+          shading: boxedSection
+            ? {
+                fill: sectionStyle === 'pill' || sectionStyle === 'capsule'
+                  ? theme.accentColor.replace('#', '')
+                  : theme.pageBackground.replace('#', ''),
+                type: ShadingType.CLEAR,
+                color: 'auto',
+              }
+            : undefined,
+          border: sectionStyle === 'minimal' || boxedSection || sectionStyle === 'timeline' || sectionStyle === 'accent-bar'
+            ? undefined
+            : {
+                bottom: {
+                  color: theme.borderColor.replace('#', ''),
+                  style: BorderStyle.SINGLE,
+                  size: sectionStyle === 'underline' ? 10 : 6,
+                },
+              },
           children: [
             new TextRun({
-              text: section.title.toUpperCase(),
+              text: sectionTitle,
               bold: true,
               size: 20,
-              color: theme.subheadingColor.replace('#', ''),
+              font: documentFont,
+              color: (sectionStyle === 'pill' || sectionStyle === 'capsule'
+                ? theme.panelBackground
+                : theme.subheadingColor).replace('#', ''),
             }),
           ],
         }),
@@ -81,9 +134,10 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
             spacing: { after: 120 },
             children: [
               new TextRun({
-                text: paragraph,
-                size: 22,
-                color: theme.bodyColor.replace('#', ''),
+              text: paragraph,
+              size: 22,
+              font: documentFont,
+              color: theme.bodyColor.replace('#', ''),
               }),
             ],
           })
@@ -99,6 +153,7 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
               new TextRun({
                 text: bullet,
                 size: 22,
+                font: documentFont,
                 color: theme.bodyColor.replace('#', ''),
               }),
             ],
@@ -113,15 +168,17 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
             children: [
               new TextRun({
                 text: entry.heading,
-                bold: true,
-                size: 24,
-                color: theme.accentColor.replace('#', ''),
+              bold: true,
+              size: 24,
+              font: documentFont,
+              color: theme.accentColor.replace('#', ''),
               }),
               ...(entry.meta
                 ? [
                     new TextRun({
                       text: `  ${entry.meta}`,
                       size: 20,
+                      font: documentFont,
                       color: theme.mutedColor.replace('#', ''),
                     }),
                   ]
@@ -137,9 +194,10 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
               spacing: { after: 80 },
               children: [
                 new TextRun({
-                  text: bullet,
-                  size: 22,
-                  color: theme.bodyColor.replace('#', ''),
+                text: bullet,
+                size: 22,
+                font: documentFont,
+                color: theme.bodyColor.replace('#', ''),
                 }),
               ],
             })
@@ -158,9 +216,7 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
           new TableCell({
             width: { size: 100, type: WidthType.PERCENTAGE },
             shading: {
-              fill: payload.templateId === 'contrast'
-                ? theme.panelBackground.replace('#', '')
-                : theme.pageBackground.replace('#', ''),
+              fill: headerFill.replace('#', ''),
               type: ShadingType.CLEAR,
               color: 'auto',
             },
@@ -172,17 +228,40 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
               right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
             },
             children: [
-              new Paragraph({
-                spacing: { after: 80 },
-                children: [
-                  new TextRun({
-                    text: resume.header.name || templateMeta.label,
-                    bold: true,
-                    size: 34,
-                    color: theme.headingColor.replace('#', ''),
-                  }),
-                ],
-              }),
+              ...(resume.header.name || (passportPhoto && !photoInSidebar)
+                ? [
+                    new Paragraph({
+                      spacing: { after: 80 },
+                      children: [
+                        ...((passportPhoto && !photoInSidebar && !['top-right', 'header-right'].includes(design.photoPlacement))
+                          ? [
+                              new ImageRun({
+                                data: passportPhoto.data,
+                                type: passportPhoto.type,
+                                transformation: { width: 58, height: 58 },
+                              }),
+                            ]
+                          : []),
+                        new TextRun({
+                          text: `${passportPhoto && !photoInSidebar && !['top-right', 'header-right'].includes(design.photoPlacement) && resume.header.name ? '  ' : ''}${resume.header.name}`,
+                          bold: true,
+                          size: 34,
+                          font: documentFont,
+                          color: (darkHeader ? '#FFFFFF' : theme.headingColor).replace('#', ''),
+                        }),
+                        ...((passportPhoto && !photoInSidebar && ['top-right', 'header-right'].includes(design.photoPlacement))
+                          ? [
+                              new ImageRun({
+                                data: passportPhoto.data,
+                                type: passportPhoto.type,
+                                transformation: { width: 58, height: 58 },
+                              }),
+                            ]
+                          : []),
+                      ],
+                    }),
+                  ]
+                : []),
               ...(resume.header.tagline
                 ? [
                     new Paragraph({
@@ -191,7 +270,8 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
                         new TextRun({
                           text: resume.header.tagline,
                           size: 22,
-                          color: theme.bodyColor.replace('#', ''),
+                          font: documentFont,
+                          color: (darkHeader ? '#F8FAFC' : theme.bodyColor).replace('#', ''),
                         }),
                       ],
                     }),
@@ -204,7 +284,8 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
                         new TextRun({
                           text: resume.header.contacts.join('  |  '),
                           size: 18,
-                          color: theme.mutedColor.replace('#', ''),
+                          font: documentFont,
+                          color: (darkHeader ? '#F8FAFC' : theme.mutedColor).replace('#', ''),
                         }),
                       ],
                     }),
@@ -219,8 +300,62 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
 
   const children = [headerTable];
 
-  if (payload.templateId === 'sidebar') {
+  if (usesSidebar) {
     const { sidebarSections, mainSections } = splitSectionsForSidebar(resume);
+    const sidebarCell = new TableCell({
+      width: { size: 28, type: WidthType.PERCENTAGE },
+      shading: {
+        fill: (theme.sidebarBackground ?? theme.accentColor).replace('#', ''),
+        type: ShadingType.CLEAR,
+        color: 'auto',
+      },
+      margins: { top: 180, right: 180, bottom: 180, left: 180 },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      },
+      children: [
+        ...(passportPhoto && photoInSidebar
+          ? [
+              new Paragraph({
+                spacing: { after: 120 },
+                children: [
+                  new ImageRun({
+                    data: passportPhoto.data,
+                    type: passportPhoto.type,
+                    transformation: { width: 58, height: 58 },
+                  }),
+                ],
+              }),
+            ]
+          : []),
+        ...makeSectionParagraphs(sidebarSections.length > 0 ? sidebarSections : resume.sections.slice(0, 2)),
+      ],
+    });
+    const mainCell = new TableCell({
+      width: { size: 72, type: WidthType.PERCENTAGE },
+      margins: { top: 180, right: 220, bottom: 180, left: 220 },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      },
+      children: makeSectionParagraphs(mainSections),
+    });
+    children.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: design.bodyStyle === 'sidebar-right' ? [mainCell, sidebarCell] : [sidebarCell, mainCell],
+          }),
+        ],
+      })
+    );
+  } else if (design.bodyStyle === 'two-column' || design.bodyStyle === 'cards' || layout === 'minimal-grid') {
     children.push(
       new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
@@ -228,31 +363,14 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
           new TableRow({
             children: [
               new TableCell({
-                width: { size: 28, type: WidthType.PERCENTAGE },
-                shading: {
-                  fill: (theme.sidebarBackground ?? theme.accentColor).replace('#', ''),
-                  type: ShadingType.CLEAR,
-                  color: 'auto',
-                },
-                margins: { top: 180, right: 180, bottom: 180, left: 180 },
-                borders: {
-                  top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                  bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                  left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                  right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                },
-                children: makeSectionParagraphs(sidebarSections.length > 0 ? sidebarSections : resume.sections.slice(0, 2)),
+                width: { size: 50, type: WidthType.PERCENTAGE },
+                margins: { top: 100, right: 150, bottom: 100, left: 0 },
+                children: makeSectionParagraphs(resume.sections.filter((_, index) => index % 2 === 0)),
               }),
               new TableCell({
-                width: { size: 72, type: WidthType.PERCENTAGE },
-                margins: { top: 180, right: 220, bottom: 180, left: 220 },
-                borders: {
-                  top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                  bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                  left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                  right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-                },
-                children: makeSectionParagraphs(mainSections),
+                width: { size: 50, type: WidthType.PERCENTAGE },
+                margins: { top: 100, right: 0, bottom: 100, left: 150 },
+                children: makeSectionParagraphs(resume.sections.filter((_, index) => index % 2 !== 0)),
               }),
             ],
           }),
@@ -277,7 +395,10 @@ async function exportDocx(payload: ExportPayload, resume: ResumeDocument) {
 
 async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
   const PDFDocument = (await import('pdfkit')).default;
-  const theme = CV_TEMPLATE_THEMES[payload.templateId];
+  const theme = getCVTemplateTheme(payload.templateId);
+  const layout = getCVTemplateLayout(payload.templateId);
+  const design = getCVTemplateDesign(payload.templateId);
+  const passportPhoto = readPassportPhoto(payload.passportPhoto);
   const doc = new PDFDocument({ size: 'A4', margin: 42 });
   const chunks: Buffer[] = [];
 
@@ -287,11 +408,40 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
   const pageHeight = doc.page.height;
   const margin = 42;
   const contentWidth = pageWidth - margin * 2;
+  const photoPlacement = design.photoPlacement === 'none' ? 'top-left' : design.photoPlacement;
+  const photoSize = 62;
+
+  const drawPassportPhoto = (x: number, y: number, lightBorder = false) => {
+    if (!passportPhoto) return;
+
+    try {
+      doc.save();
+      if (design.photoShape === 'circle') {
+        doc.circle(x + photoSize / 2, y + photoSize / 2, photoSize / 2).clip();
+      } else if (design.photoShape === 'rounded') {
+        doc.roundedRect(x, y, photoSize, photoSize, 10).clip();
+      }
+      doc.image(passportPhoto.data, x, y, { fit: [photoSize, photoSize] });
+      doc.restore();
+      doc.save();
+      doc.lineWidth(2).strokeColor(lightBorder ? '#FFFFFF' : theme.panelBackground);
+      if (design.photoShape === 'circle') {
+        doc.circle(x + photoSize / 2, y + photoSize / 2, photoSize / 2 - 1).stroke();
+      } else if (design.photoShape === 'rounded') {
+        doc.roundedRect(x + 1, y + 1, photoSize - 2, photoSize - 2, 9).stroke();
+      } else {
+        doc.rect(x + 1, y + 1, photoSize - 2, photoSize - 2).stroke();
+      }
+      doc.restore();
+    } catch {
+      // An invalid image must not block the rest of the CV export.
+    }
+  };
 
   const ensureSpace = (neededHeight = 80) => {
     if (doc.y + neededHeight > pageHeight - margin) {
       doc.addPage();
-      if (payload.templateId === 'contrast') {
+      if (layout === 'contrast') {
         doc.save();
         doc.rect(0, 0, pageWidth, pageHeight).fill(theme.pageBackground);
         doc.restore();
@@ -301,22 +451,33 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
 
   const writeSection = (section: ResumeSection, x = margin, width = contentWidth) => {
     ensureSpace(90);
-    doc
-      .strokeColor(theme.borderColor)
-      .lineWidth(1)
-      .moveTo(x, doc.y)
-      .lineTo(x + width, doc.y)
-      .stroke();
-    doc.moveDown(0.55);
+    const sectionStyle = design.sectionStyle;
+    const title = sectionStyle === 'numbered'
+      ? `${String(resume.sections.indexOf(section) + 1).padStart(2, '0')}  ${section.title.toUpperCase()}`
+      : section.title.toUpperCase();
+    const sectionY = doc.y;
 
-    doc
-      .fillColor(theme.subheadingColor)
-      .font('Helvetica-Bold')
-      .fontSize(10)
-      .text(section.title.toUpperCase(), x, doc.y, {
-        width,
-        characterSpacing: 1.1,
-      });
+    if (sectionStyle === 'accent-bar' || sectionStyle === 'timeline') {
+      doc.rect(x, sectionY, sectionStyle === 'timeline' ? 7 : width, sectionStyle === 'timeline' ? 7 : 4).fill(theme.accentColor);
+      doc.y = sectionY + 10;
+    } else if (sectionStyle !== 'minimal' && sectionStyle !== 'boxed' && sectionStyle !== 'pill' && sectionStyle !== 'capsule') {
+      doc.strokeColor(theme.borderColor).lineWidth(1).moveTo(x, sectionY).lineTo(x + width, sectionY).stroke();
+      doc.moveDown(0.55);
+    }
+
+    doc.fillColor(theme.subheadingColor).font('Helvetica-Bold').fontSize(10);
+    if (sectionStyle === 'pill' || sectionStyle === 'capsule') {
+      const pillWidth = Math.min(width, doc.widthOfString(title) + 22);
+      const titleY = doc.y;
+      doc.roundedRect(x, titleY, pillWidth, 20, 10).fill(theme.accentColor);
+      doc.fillColor(theme.panelBackground).text(title, x + 11, titleY + 5, { width: pillWidth - 16, characterSpacing: 0.8 });
+    } else if (sectionStyle === 'boxed') {
+      const titleY = doc.y;
+      doc.roundedRect(x, titleY, width, 24, 6).fill(theme.pageBackground);
+      doc.fillColor(theme.subheadingColor).text(title, x + 10, titleY + 6, { width: width - 20, characterSpacing: 1.1 });
+    } else {
+      doc.text(title, x, doc.y, { width, characterSpacing: 1.1 });
+    }
     doc.moveDown(0.4);
 
     section.paragraphs.forEach((paragraph) => {
@@ -370,7 +531,7 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
     doc.moveDown(0.6);
   };
 
-  if (payload.templateId === 'contrast') {
+  if (layout === 'contrast') {
     doc.save();
     doc.rect(0, 0, pageWidth, pageHeight).fill(theme.pageBackground);
     doc.restore();
@@ -380,29 +541,41 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
     doc.restore();
   }
 
-  if (payload.templateId === 'sidebar') {
+  const usesSidebar = ['sidebar-left', 'sidebar-right'].includes(design.bodyStyle) || layout === 'sidebar';
+
+  if (usesSidebar) {
     const sidebarWidth = 160;
-    const mainX = margin + sidebarWidth + 18;
+    const sidebarOnRight = design.bodyStyle === 'sidebar-right';
+    const sidebarX = sidebarOnRight ? margin + contentWidth - sidebarWidth : margin;
+    const mainX = sidebarOnRight ? margin : margin + sidebarWidth + 18;
     const mainWidth = contentWidth - sidebarWidth - 18;
     const { sidebarSections, mainSections } = splitSectionsForSidebar(resume);
 
     doc.save();
-    doc.roundedRect(margin, margin, sidebarWidth, pageHeight - margin * 2, 18).fill(theme.sidebarBackground ?? theme.accentColor);
+    doc.roundedRect(sidebarX, margin, sidebarWidth, pageHeight - margin * 2, 18).fill(theme.sidebarBackground ?? theme.accentColor);
     doc.restore();
 
-    doc
-      .fillColor(theme.sidebarText ?? '#FFFFFF')
-      .font('Helvetica-Bold')
-      .fontSize(18)
-      .text(resume.header.name || CV_TEMPLATE_META[payload.templateId].label, margin + 18, margin + 18, {
-        width: sidebarWidth - 36,
-      });
+    const photoInSidebar = passportPhoto && photoPlacement === 'sidebar-top';
+    const photoAtStart = passportPhoto && ['top-left', 'header-left', 'inline'].includes(photoPlacement);
+    const photoAtEnd = passportPhoto && ['top-right', 'header-right'].includes(photoPlacement);
+    const sidebarHeaderY = photoInSidebar ? margin + photoSize + 30 : margin + 18;
+    if (photoInSidebar) drawPassportPhoto(sidebarX + 18, margin + 18, true);
+
+    if (resume.header.name) {
+      doc
+        .fillColor(theme.sidebarText ?? '#FFFFFF')
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .text(resume.header.name, sidebarX + 18, sidebarHeaderY, {
+          width: sidebarWidth - 36,
+        });
+    }
     if (resume.header.tagline) {
       doc
         .fillColor(theme.sidebarText ?? '#FFFFFF')
         .font('Helvetica')
         .fontSize(10)
-        .text(resume.header.tagline, margin + 18, doc.y + 6, { width: sidebarWidth - 36, lineGap: 3 });
+        .text(resume.header.tagline, sidebarX + 18, doc.y + 6, { width: sidebarWidth - 36, lineGap: 3 });
     }
     if (resume.header.contacts.length > 0) {
       doc.moveDown(0.6);
@@ -411,7 +584,7 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
           .fillColor('#DBEAFE')
           .font('Helvetica')
           .fontSize(9)
-          .text(contact, margin + 18, doc.y + 4, { width: sidebarWidth - 36, lineGap: 2 });
+          .text(contact, sidebarX + 18, doc.y + 4, { width: sidebarWidth - 36, lineGap: 2 });
       });
     }
 
@@ -422,7 +595,7 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
         .fillColor('#DBEAFE')
         .font('Helvetica-Bold')
         .fontSize(10)
-        .text(section.title.toUpperCase(), margin + 18, doc.y, { width: sidebarWidth - 36 });
+        .text(section.title.toUpperCase(), sidebarX + 18, doc.y, { width: sidebarWidth - 36 });
       doc.moveDown(0.3);
       [...section.paragraphs, ...section.bullets, ...section.entries.flatMap((entry) => [entry.heading, ...(entry.meta ? [entry.meta] : []), ...entry.bullets])]
         .forEach((line) => {
@@ -430,75 +603,86 @@ async function exportPdf(payload: ExportPayload, resume: ResumeDocument) {
             .fillColor(theme.sidebarText ?? '#FFFFFF')
             .font('Helvetica')
             .fontSize(8.6)
-            .text(line, margin + 18, doc.y + 2, { width: sidebarWidth - 36, lineGap: 2 });
+            .text(line, sidebarX + 18, doc.y + 2, { width: sidebarWidth - 36, lineGap: 2 });
         });
       doc.moveDown(0.7);
     });
 
     doc.y = margin + 26;
-    doc
-      .fillColor(theme.headingColor)
-      .font('Helvetica-Bold')
-      .fontSize(26)
-      .text(resume.header.name || CV_TEMPLATE_META[payload.templateId].label, mainX, doc.y, { width: mainWidth });
+    const mainNameX = photoAtStart ? mainX + photoSize + 14 : mainX;
+    const mainNameWidth = mainWidth - (photoAtStart || photoAtEnd ? photoSize + 14 : 0);
+    if (photoAtStart) drawPassportPhoto(mainX, margin + 18);
+    if (photoAtEnd) drawPassportPhoto(mainX + mainWidth - photoSize, margin + 18);
+    if (resume.header.name) {
+      doc
+        .fillColor(theme.headingColor)
+        .font('Helvetica-Bold')
+        .fontSize(26)
+        .text(resume.header.name, mainNameX, doc.y, { width: mainNameWidth });
+    }
     if (resume.header.tagline) {
       doc
         .fillColor(theme.bodyColor)
         .font('Helvetica')
         .fontSize(11)
-        .text(resume.header.tagline, mainX, doc.y + 6, { width: mainWidth, lineGap: 3 });
+        .text(resume.header.tagline, mainNameX, doc.y + 6, { width: mainNameWidth, lineGap: 3 });
     }
     doc.moveDown(0.8);
     mainSections.forEach((section) => writeSection(section, mainX, mainWidth));
     doc.y = Math.max(doc.y, savedY);
   } else {
-    const headerHeight = payload.templateId === 'spotlight' ? 116 : 96;
-    const headerFill = payload.templateId === 'spotlight'
-      ? theme.accentColor
-      : payload.templateId === 'contrast'
-        ? theme.panelBackground
-        : theme.panelBackground;
+    const visualHeaderStyle = design.headerStyle;
+    const darkHeader = ['banner', 'diagonal'].includes(visualHeaderStyle) || layout === 'spotlight' || layout === 'contrast';
+    const headerHeight = visualHeaderStyle === 'compact' ? 82 : darkHeader || visualHeaderStyle === 'centered' ? 126 : 102;
+    const headerFill = darkHeader ? theme.accentColor : visualHeaderStyle === 'panel' || visualHeaderStyle === 'boxed' ? theme.pageBackground : theme.panelBackground;
 
     doc.save();
     doc.roundedRect(margin, margin, contentWidth, headerHeight, 20).fill(headerFill);
     doc.restore();
 
-    const headerTextColor = payload.templateId === 'contrast' || payload.templateId === 'spotlight'
-      ? '#F8FAFC'
-      : theme.headingColor;
+    const headerTextColor = darkHeader ? '#F8FAFC' : theme.headingColor;
 
-    doc
-      .fillColor(headerTextColor)
-      .font('Helvetica-Bold')
-      .fontSize(24)
-      .text(resume.header.name || CV_TEMPLATE_META[payload.templateId].label, margin + 22, margin + 20, {
-        width: contentWidth - 44,
-      });
+    doc.y = margin + 20;
+    const photoAtStart = passportPhoto && ['top-left', 'header-left', 'inline'].includes(photoPlacement);
+    const photoAtEnd = passportPhoto && ['top-right', 'header-right'].includes(photoPlacement);
+    const photoX = photoAtEnd ? margin + contentWidth - photoSize - 22 : margin + 22;
+    const nameX = photoAtStart ? margin + photoSize + 34 : margin + 22;
+    const nameWidth = contentWidth - 44 - (photoAtStart || photoAtEnd ? photoSize + 14 : 0);
+    if (passportPhoto && (photoAtStart || photoAtEnd)) drawPassportPhoto(photoX, margin + 20, darkHeader);
+    if (resume.header.name) {
+      doc
+        .fillColor(headerTextColor)
+        .font('Helvetica-Bold')
+        .fontSize(24)
+        .text(resume.header.name, nameX, doc.y, {
+          width: nameWidth,
+        });
+    }
 
     if (resume.header.tagline) {
       doc
-        .fillColor(payload.templateId === 'spotlight' ? '#FFF7ED' : theme.bodyColor)
+        .fillColor(layout === 'spotlight' ? '#FFF7ED' : theme.bodyColor)
         .font('Helvetica')
         .fontSize(11)
-        .text(resume.header.tagline, margin + 22, doc.y + 6, {
-          width: contentWidth - 44,
+        .text(resume.header.tagline, nameX, doc.y + 6, {
+          width: nameWidth,
           lineGap: 3,
         });
     }
 
     if (resume.header.contacts.length > 0) {
       doc
-        .fillColor(payload.templateId === 'spotlight' ? '#FFEDD5' : theme.mutedColor)
+        .fillColor(layout === 'spotlight' ? '#FFEDD5' : theme.mutedColor)
         .font('Helvetica')
         .fontSize(9.5)
-        .text(resume.header.contacts.join('  |  '), margin + 22, margin + headerHeight - 26, {
-          width: contentWidth - 44,
+        .text(resume.header.contacts.join('  |  '), nameX, margin + headerHeight - 26, {
+          width: nameWidth,
         });
     }
 
     doc.y = margin + headerHeight + 18;
 
-    if (payload.templateId === 'minimal-grid') {
+    if (design.bodyStyle === 'two-column' || layout === 'minimal-grid') {
       const columnWidth = (contentWidth - 16) / 2;
       let leftY = doc.y;
       let rightY = doc.y;

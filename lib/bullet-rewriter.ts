@@ -1,8 +1,7 @@
 import 'server-only';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL } from '@/lib/groq-model';
 import type { ATSResult } from '@/lib/ats-scorer';
-
-const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
 
 function getGroqClient(): Groq | null {
   const apiKey = process.env.GROQ_API_KEY?.trim();

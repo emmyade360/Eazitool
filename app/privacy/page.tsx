@@ -29,7 +29,14 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-bold text-slate-900">Browser storage</h2>
             <p className="text-sm leading-7 text-slate-600">
-              Eazitool does not currently display advertising or use advertising cookies. Some tools save preferences or a business profile in your browser&apos;s local storage so you do not have to type the same details again. This information stays on your device unless you clear it.
+              Eazitool does not currently display advertising or use advertising cookies. Some tools save preferences or a business profile in your browser&apos;s local storage so you do not have to type the same details again. This information stays on your device unless you clear it. We also use a first-party, HTTP-only cookie containing a random visitor ID to recognise returning visits and associate feedback with visitor activity.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-slate-900">Feedback and visitor activity</h2>
+            <p className="text-sm leading-7 text-slate-600">
+              Ratings, comments, optional email addresses, visitor IDs, pages visited and visit times are stored in our secure feedback database so the site owner can review and improve Eazitool. We do not store a readable IP address: we store a secret-keyed hash of it solely to help identify repeat activity and protect the service from abuse. This data is not used for advertising or sold to third parties.
             </p>
           </section>
 

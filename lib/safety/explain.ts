@@ -1,5 +1,6 @@
 import 'server-only';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL } from '@/lib/groq-model';
 import { getSignalById } from './scam-rules';
 import { RISK_LEVEL_COPY, type RiskLevel } from './types';
 
@@ -9,8 +10,6 @@ import { RISK_LEVEL_COPY, type RiskLevel } from './types';
  * change it. Degrades to a template whenever Groq is unavailable — the client
  * never sees a failure.
  */
-
-const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
 
 function getGroqClient(): Groq | null {
   const apiKey = process.env.GROQ_API_KEY?.trim();

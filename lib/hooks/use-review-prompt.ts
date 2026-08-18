@@ -20,15 +20,11 @@ export function useReviewPrompt() {
 
   const onSubmit = useCallback(
     async (review: { rating: number; comment: string; documentType: string }) => {
-      try {
-        await submitReview({
-          document_type: review.documentType,
-          rating: review.rating,
-          comment: review.comment || undefined,
-        });
-      } catch {
-        // A failed review must never surface as a tool error.
-      }
+      await submitReview({
+        document_type: review.documentType,
+        rating: review.rating,
+        comment: review.comment || undefined,
+      });
       setIsOpen(false);
     },
     [],

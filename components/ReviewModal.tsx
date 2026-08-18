@@ -6,7 +6,7 @@ import { hasReviewedToday, markReviewed } from '@/lib/review-gate';
 interface ReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (review: { rating: number; comment: string; documentType: string }) => void;
+  onSubmit: (review: { rating: number; comment: string; documentType: string }) => Promise<void>;
   documentType: string;
 }
 
@@ -16,11 +16,13 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [blockedForToday, setBlockedForToday] = useState(false);
+  const [error, setError] = useState('');
 
   // Auto-dismiss if this tool was already reviewed today
   useEffect(() => {
     if (!isOpen) {
       setBlockedForToday(false);
+      setError('');
       return;
     }
 
@@ -39,6 +41,7 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
     if (rating === 0) return;
 
     setSubmitting(true);
+    setError('');
     try {
       await onSubmit({ rating, comment, documentType });
       markReviewed(documentType);
@@ -46,8 +49,8 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
       setHovered(0);
       setComment('');
       onClose();
-    } catch {
-      // parent swallows errors
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save feedback. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -138,6 +141,12 @@ export default function ReviewModal({ isOpen, onClose, onSubmit, documentType }:
               placeholder="Any suggestions or feedback to help us improve..."
             />
           </div>
+
+          {error && (
+            <p role="alert" className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3">

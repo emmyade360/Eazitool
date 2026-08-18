@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL } from '@/lib/groq-model';
 import {
   BODY_LIMITS,
   RATE_LIMITS,
@@ -110,6 +111,7 @@ ${STYLE_INSTRUCTION[payload.style]}
 
 CRITICAL RULES:
 - Output only the CV content. No preamble, no commentary.
+- Start with the candidate's name on a plain first line, then their contact details on separate plain lines. Do not make the name a Markdown heading.
 - Use ## for main section headings.
 - Use **bold** for job titles and company names.
 - Bullet points must start with strong action verbs.
@@ -119,6 +121,7 @@ CRITICAL RULES:
 - If a field or section is blank, omit it completely.
 - Never guess or fabricate an address, location, phone number, website, LinkedIn URL, dates, institutions, employers, or metrics.
 - Do not add placeholders such as "N/A", "Available on request", or guessed city/country values.
+- Never include a template, design, product, or style name in the CV content.
 
 ---
 CANDIDATE:
@@ -142,50 +145,24 @@ export async function POST(req: NextRequest) {
   }
   try {
     const payload = (await req.json()) as CVPayload;
-    const styles: Array<'classic' | 'impact' | 'story'> = ['classic', 'impact', 'story'];
+    // The builder now has one template-controlled output path. Generating three
+    // alternative drafts here added large, unused Groq requests and delayed the
+    // template library from opening.
+    const result = await getGroq().chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: buildPrompt({ ...payload, style: 'classic' }) }],
+      temperature: 0.25,
+      max_tokens: 2500,
+    });
 
-    const results = await Promise.all(
-      styles.map((style) =>
-        getGroq().chat.completions
-          .create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: buildPrompt({ ...payload, style }) }],
-            temperature: style === 'story' ? 0.55 : 0.25,
-            max_tokens: 2500,
-          })
-          .then((result) => ({
-            style,
-            content: result.choices[0]?.message?.content ?? '',
-          }))
-      )
-    );
-
-    const variants = [
-      {
-        style: 'classic',
-        title: 'Classic',
-        badge: 'Traditional',
-        description: 'Formal, structured, and universally accepted. Ideal for corporate, legal, finance, and government roles.',
-        color: 'blue',
-      },
-      {
-        style: 'impact',
-        title: 'Impact',
-        badge: 'Data-Driven',
-        description: 'Metric-heavy, action-verb-led bullets. Built for ATS and designed to impress in tech, sales, and startups.',
-        color: 'violet',
-      },
-      {
-        style: 'story',
-        title: 'Story-Driven',
-        badge: 'Distinctive',
-        description: 'Narrative arc, compelling language. Perfect for leadership, creative, or senior roles where voice matters.',
-        color: 'emerald',
-      },
-    ].map((meta) => ({
-      ...meta,
-      content: results.find((r) => r.style === meta.style)?.content ?? '',
-    }));
+    const variants = [{
+      style: 'classic',
+      title: 'CV Draft',
+      badge: 'Template-ready',
+      description: 'One ATS-safe CV draft formatted by the template you select.',
+      color: 'blue',
+      content: result.choices[0]?.message?.content ?? '',
+    }];
 
     return NextResponse.json({ variants });
   } catch (error) {

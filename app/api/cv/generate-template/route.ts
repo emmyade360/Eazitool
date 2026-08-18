@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL } from '@/lib/groq-model';
 import {
   BODY_LIMITS,
   RATE_LIMITS,
@@ -73,12 +74,17 @@ export async function POST(req: NextRequest) {
     if (!content || !templateId) {
       return NextResponse.json({ error: 'Missing content or templateId.' }, { status: 400 });
     }
+    if (typeof templateId !== 'string' || !TEMPLATE_META[templateId]) {
+      return NextResponse.json({ error: 'Unknown professional template.' }, { status: 400 });
+    }
 
     const result = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: GROQ_MODEL,
       messages: [{ role: 'user', content: buildPrompt(templateId, content) }],
       temperature: 0.3,
-      max_tokens: 4000,
+      // One template is generated on demand; this cap keeps the request well
+      // below Groq burst limits while leaving room for a complete print layout.
+      max_tokens: 2400,
     });
 
     let htmlTemplate = result.choices[0]?.message?.content ?? '';

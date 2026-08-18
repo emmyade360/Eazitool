@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL } from '@/lib/groq-model';
 import {
   BODY_LIMITS,
   RATE_LIMITS,
@@ -52,7 +53,7 @@ Requirements:
 Output the improved summary now:`;
 
     const result = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       max_tokens: 500,
